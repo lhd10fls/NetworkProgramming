@@ -1,0 +1,10 @@
+server
+client
+server.exe
+client.exe
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+__pycache__/
