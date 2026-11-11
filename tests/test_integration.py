@@ -46,8 +46,14 @@ class Peer:
         self.sock.close()
 
 
-def start_server(port, db_path):
-    proc = subprocess.Popen([str(SERVER), str(port), str(db_path)], cwd=ROOT,
+def start_server(port, db_path, seed=False):
+    env = os.environ.copy()
+    env["EXAM_ADMIN_CODE"] = "admin123"
+    if not seed:
+        env["EXAM_SKIP_SEED"] = "1"
+    else:
+        env.pop("EXAM_SKIP_SEED", None)
+    proc = subprocess.Popen([str(SERVER), str(port), str(db_path)], cwd=ROOT, env=env,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     for _ in range(100):
         if proc.poll() is not None:
@@ -76,6 +82,30 @@ def port_available():
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def test_starter_bank():
+    with tempfile.TemporaryDirectory() as folder:
+        db_path = Path(folder) / "exam.db"
+        port = port_available()
+        server = start_server(port, db_path, seed=True)
+        try:
+            with closing(sqlite3.connect(db_path)) as check_db:
+                assert check_db.execute("SELECT COUNT(*) FROM questions").fetchone()[0] == 20
+            student = Peer(port)
+            assert student.ask("REGISTER|seed_user|pw|student|") == "OK|REGISTERED"
+            assert student.ask("LOGIN|seed_user|pw") == "OK|LOGIN|student"
+            assert student.ask("CREATE|starter_room|20|30") == "OK|ROOM|WAITING"
+            assert student.ask("PRACTICE|20|30").startswith("PRACTICE|")
+            student.close()
+        finally:
+            stop_server(server)
+        server = start_server(port, db_path, seed=True)
+        try:
+            with closing(sqlite3.connect(db_path)) as check_db:
+                assert check_db.execute("SELECT COUNT(*) FROM questions").fetchone()[0] == 20
+        finally:
+            stop_server(server)
 
 
 def test_full_flow():
@@ -218,5 +248,6 @@ def test_full_flow():
 
 
 if __name__ == "__main__":
+    test_starter_bank()
     test_full_flow()
     print("All integration checks passed.")

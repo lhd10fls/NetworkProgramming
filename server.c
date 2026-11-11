@@ -1,5 +1,6 @@
 #include "net.h"
 #include "password.h"
+#include "seed_questions.h"
 #include <sqlite3.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -96,7 +97,8 @@ static int init_db(const char *path) {
       sql("CREATE TABLE IF NOT EXISTS practices(id INTEGER PRIMARY KEY,user_id INTEGER NOT NULL,count INTEGER NOT NULL,duration INTEGER NOT NULL,end_at INTEGER NOT NULL,score INTEGER,submitted_at INTEGER,FOREIGN KEY(user_id) REFERENCES users(id));") &&
       sql("CREATE TABLE IF NOT EXISTS practice_questions(practice_id INTEGER NOT NULL,position INTEGER NOT NULL,question_id INTEGER NOT NULL,PRIMARY KEY(practice_id,position),FOREIGN KEY(practice_id) REFERENCES practices(id),FOREIGN KEY(question_id) REFERENCES questions(id));") &&
       sql("CREATE TABLE IF NOT EXISTS practice_answers(practice_id INTEGER NOT NULL,position INTEGER NOT NULL,selected TEXT NOT NULL,PRIMARY KEY(practice_id,position),FOREIGN KEY(practice_id) REFERENCES practices(id));") &&
-      sql("CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY,user_id INTEGER,event TEXT NOT NULL,detail TEXT NOT NULL,at INTEGER NOT NULL DEFAULT (strftime('%s','now')),FOREIGN KEY(user_id) REFERENCES users(id));");
+      sql("CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY,user_id INTEGER,event TEXT NOT NULL,detail TEXT NOT NULL,at INTEGER NOT NULL DEFAULT (strftime('%s','now')),FOREIGN KEY(user_id) REFERENCES users(id));") &&
+      seed_questions(db);
 }
 
 static int room_id(const char *name) {

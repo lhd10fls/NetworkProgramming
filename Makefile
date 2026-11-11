@@ -10,8 +10,8 @@ else
 endif
 
 all: server$(EXE) client$(EXE)
-server$(EXE): server.c net.c net.h password.c password.h
-	$(CC) $(CFLAGS) server.c net.c password.c -o $@ $(LDLIBS)
+server$(EXE): server.c net.c net.h password.c password.h seed_questions.c seed_questions.h
+	$(CC) $(CFLAGS) server.c net.c password.c seed_questions.c -o $@ $(LDLIBS)
 client$(EXE): client.c net.c net.h
 	$(CC) $(CFLAGS) client.c net.c -o $@ $(LDLIBS)
 clean:

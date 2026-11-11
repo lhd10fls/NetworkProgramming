@@ -4,7 +4,7 @@
 
 ## Luồng hoạt động
 
-1. Server mở `exam.db`, tạo bảng nếu đây là lần chạy đầu, lắng nghe cổng 9000 và tạo một luồng cho mỗi client.
+1. Server mở `exam.db`, tạo bảng nếu đây là lần chạy đầu và nạp **20 câu hỏi mẫu** khi ngân hàng câu hỏi còn rỗng. Server lắng nghe cổng 9000 và tạo một luồng cho mỗi client.
 2. Người dùng đăng ký, đăng nhập. Tài khoản nào cũng có thể tạo phòng; chỉ **chủ phòng** được bắt đầu phòng. Admin được thêm câu hỏi vào ngân hàng.
 3. Chủ phòng tạo phòng với số câu và thời lượng. Server chỉ tạo nếu ngân hàng có đủ câu; câu hỏi được chọn ngẫu nhiên và cố định cho phòng. Trạng thái đầu tiên là `WAITING`.
 4. Người thi `JOIN` khi phòng còn `WAITING`. Client gửi `WAIT` và chờ. Khi chủ phòng gửi `START`, server đặt một `end_at` chung và trả **toàn bộ đề** cho các client đang chờ. Trạng thái chuyển thành `RUNNING`.
@@ -69,7 +69,9 @@ $env:EXAM_ADMIN_CODE='ma-bi-mat-cua-nhom'
 .\client.exe 127.0.0.1 9000
 ```
 
-Trong terminal 2, đăng ký admin bằng mã đã đặt, đăng nhập, chọn **Add question** để nhập ít nhất hai câu, rồi **Create room**. Tài khoản student cũng có quyền tạo phòng, nhưng không có quyền thêm câu hỏi. Trong terminal 3, đăng ký và đăng nhập, chọn **Join room**. Client sẽ chờ. Quay về terminal 2, chọn **Start room**; terminal 3 nhận đề và bắt đầu làm. Sau khi nộp hoặc hết giờ, dùng **Results** để xem điểm.
+Trong terminal 2, đăng ký và đăng nhập, rồi chọn **Create room**. Database mới đã có sẵn 20 câu hỏi mẫu về C, mạng, cơ sở dữ liệu và bảo mật; có thể tạo phòng hoặc luyện tập ngay. Nếu muốn tự thêm câu hỏi, đăng ký admin bằng mã đã đặt rồi chọn **Add question**. Tài khoản student cũng có quyền tạo phòng, nhưng không có quyền thêm câu hỏi. Trong terminal 3, đăng ký và đăng nhập, chọn **Join room**. Client sẽ chờ. Quay về terminal 2, chọn **Start room**; terminal 3 nhận đề và bắt đầu làm. Sau khi nộp hoặc hết giờ, dùng **Results** để xem điểm.
+
+Câu hỏi mẫu chỉ được nạp khi bảng `questions` đang rỗng; khởi động lại server không tạo thêm bản sao. Muốn dùng ngân hàng tự chuẩn bị ngay từ đầu, đặt `EXAM_SKIP_SEED=1` trước khi chạy server, sau đó thêm câu qua admin hoặc dùng công cụ nhập từ project cũ.
 
 `EXAM_ADMIN_CODE` mặc định là `admin123` nếu không đặt biến môi trường; nên đặt mã khác khi demo. Server mặc định dùng cổng `9000` và `exam.db`. Client mặc định kết nối `127.0.0.1:9000`.
 
@@ -87,7 +89,7 @@ Sau khi biên dịch, chạy bài kiểm thử tích hợp:
 python tests/test_integration.py
 ```
 
-Bài kiểm thử dùng database tạm, khởi động **server thật** và gửi thông điệp TCP như client. Nó kiểm tra khung bị chia nhỏ và nhiều khung trong một lần gửi, đăng ký/đăng nhập, phân quyền, tạo/vào/bắt đầu phòng, phát đề, đổi đáp án, nộp sớm, thông báo tự động khi hết giờ (cả trên client thật), luyện tập, đổi mật khẩu và dữ liệu sau restart. Trên máy này đã chạy thành công với Python trong runtime của Codex.
+Bài kiểm thử dùng database tạm, khởi động **server thật** và gửi thông điệp TCP như client. Nó kiểm tra câu hỏi mẫu khi khởi tạo database, khung bị chia nhỏ và nhiều khung trong một lần gửi, đăng ký/đăng nhập, phân quyền, tạo/vào/bắt đầu phòng, phát đề, đổi đáp án, nộp sớm, thông báo tự động khi hết giờ (cả trên client thật), luyện tập, đổi mật khẩu và dữ liệu sau restart. Phần kiểm thử luồng thi riêng dùng `EXAM_SKIP_SEED=1` để có ngân hàng câu hỏi xác định.
 
 ## Dữ liệu từ project cũ
 
@@ -97,7 +99,7 @@ Nếu muốn lấy ngân hàng câu hỏi từ `NetProgramming-main/test_system.
 python tools/import_questions.py ..\NetProgramming-main\test_system.db exam.db
 ```
 
-Script chỉ lấy câu hỏi hợp lệ và bỏ qua câu trùng. Nó không chuyển tài khoản, phòng và lượt thi cũ vì cấu trúc vòng đời và mật khẩu của bản mới khác bản cũ.
+Script chỉ lấy câu hỏi hợp lệ và bỏ qua câu trùng. Nó có thể thêm câu hỏi từ project cũ bên cạnh 20 câu mẫu; nếu chỉ muốn dùng câu hỏi cũ, khởi động server lần đầu với `EXAM_SKIP_SEED=1`. Script không chuyển tài khoản, phòng và lượt thi cũ vì cấu trúc vòng đời và mật khẩu của bản mới khác bản cũ.
 
 ## Giới hạn triển khai
 
