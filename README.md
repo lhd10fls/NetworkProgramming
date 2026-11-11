@@ -1,6 +1,6 @@
 # Online Test System — đề tài 10
 
-Đây là **bản project mới**, độc lập với `NetProgramming-main`. Bản gốc không bị sửa. Ứng dụng vẫn dùng **C, TCP socket, pthread và SQLite**, nhưng vòng đời phòng thi, giao thức truyền dữ liệu và chế độ luyện tập đã được viết lại theo đề tài số 10 trong `IT4062_Network_Programing_Project_Topic_TungBT.xlsx`.
+Ứng dụng thi trắc nghiệm trực tuyến được xây dựng bằng **C11, TCP socket, pthread và SQLite**. Hệ thống hỗ trợ đăng ký, đăng nhập, luyện tập cá nhân và thi theo phòng có giới hạn thời gian. Server quản lý câu hỏi, bài làm và kết quả; client cung cấp giao diện dòng lệnh cho người dùng.
 
 ## Luồng hoạt động
 
@@ -16,7 +16,7 @@ Mọi trạng thái quan trọng nằm trong SQLite, nên sau khi khởi động
 
 ## Đối chiếu 13 tiêu chí Excel (20 điểm)
 
-| Tiêu chí | Cách thực hiện trong bản này |
+| Tiêu chí | Cách thực hiện |
 |---|---|
 | Xử lý truyền dòng (1) | TCP dùng khung **4 byte độ dài theo network byte order + nội dung UTF-8**. `send_all`/`recv_all` xử lý chia/gộp gói tin trong `net.c`. |
 | Vào/ra socket trên server (2) | `socket` → `bind` → `listen` → `accept`; kiểm tra lỗi khởi động, một pthread cho mỗi kết nối trong `server.c`. |
@@ -32,14 +32,15 @@ Mọi trạng thái quan trọng nằm trong SQLite, nên sau khi khởi động
 | Xem kết quả thi của các phòng thi (1) | `RESULTS` chỉ khi `FINISHED`; có điểm từng người và cờ nộp tự động. Dữ liệu tồn tại sau khi restart. |
 | Ghi log hoạt động (1) | Bảng `logs` ghi đăng ký, đăng nhập, tạo/vào/bắt đầu/kết thúc phòng, nộp bài, luyện tập, đổi mật khẩu và ngắt kết nối. |
 
+Xem [BENCHMARK_ANALYSIS.md](BENCHMARK_ANALYSIS.md) để biết vị trí xử lý từng tiêu chí trong mã nguồn và các tình huống đã kiểm thử.
+
 ## Biên dịch
 
 ### Windows
 
-Cần MinGW GCC, thư viện SQLite trong `C:\Program Files\mingw64\opt` như máy đang dùng. Chạy trong PowerShell:
+Cần MinGW GCC và thư viện SQLite. Mở PowerShell tại thư mục project rồi chạy:
 
 ```powershell
-cd 'D:\tài liệu\network programming\Project\NetProgramming-complete'
 .\build-windows.ps1
 ```
 
@@ -69,9 +70,9 @@ $env:EXAM_ADMIN_CODE='ma-bi-mat-cua-nhom'
 .\client.exe 127.0.0.1 9000
 ```
 
-Trong terminal 2, đăng ký và đăng nhập, rồi chọn **Create room**. Database mới đã có sẵn 20 câu hỏi mẫu về C, mạng, cơ sở dữ liệu và bảo mật; có thể tạo phòng hoặc luyện tập ngay. Nếu muốn tự thêm câu hỏi, đăng ký admin bằng mã đã đặt rồi chọn **Add question**. Tài khoản student cũng có quyền tạo phòng, nhưng không có quyền thêm câu hỏi. Trong terminal 3, đăng ký và đăng nhập, chọn **Join room**. Client sẽ chờ. Quay về terminal 2, chọn **Start room**; terminal 3 nhận đề và bắt đầu làm. Sau khi nộp hoặc hết giờ, dùng **Results** để xem điểm.
+Trong terminal 2, đăng ký và đăng nhập, rồi chọn **Create room**. Khi khởi tạo database rỗng, server nạp 20 câu hỏi mẫu về C, mạng, cơ sở dữ liệu và bảo mật; có thể tạo phòng hoặc luyện tập ngay. Nếu muốn tự thêm câu hỏi, đăng ký admin bằng mã đã đặt rồi chọn **Add question**. Tài khoản student cũng có quyền tạo phòng, nhưng không có quyền thêm câu hỏi. Trong terminal 3, đăng ký và đăng nhập, chọn **Join room**. Client sẽ chờ. Quay về terminal 2, chọn **Start room**; terminal 3 nhận đề và bắt đầu làm. Sau khi nộp hoặc hết giờ, dùng **Results** để xem điểm.
 
-Câu hỏi mẫu chỉ được nạp khi bảng `questions` đang rỗng; khởi động lại server không tạo thêm bản sao. Muốn dùng ngân hàng tự chuẩn bị ngay từ đầu, đặt `EXAM_SKIP_SEED=1` trước khi chạy server, sau đó thêm câu qua admin hoặc dùng công cụ nhập từ project cũ.
+Câu hỏi mẫu chỉ được nạp khi bảng `questions` đang rỗng; khởi động lại server không tạo thêm bản sao. Muốn dùng ngân hàng câu hỏi tự chuẩn bị, đặt `EXAM_SKIP_SEED=1` trước khi chạy server lần đầu, sau đó thêm câu qua tài khoản admin.
 
 `EXAM_ADMIN_CODE` mặc định là `admin123` nếu không đặt biến môi trường; nên đặt mã khác khi demo. Server mặc định dùng cổng `9000` và `exam.db`. Client mặc định kết nối `127.0.0.1:9000`.
 
@@ -90,16 +91,6 @@ python tests/test_integration.py
 ```
 
 Bài kiểm thử dùng database tạm, khởi động **server thật** và gửi thông điệp TCP như client. Nó kiểm tra câu hỏi mẫu khi khởi tạo database, khung bị chia nhỏ và nhiều khung trong một lần gửi, đăng ký/đăng nhập, phân quyền, tạo/vào/bắt đầu phòng, phát đề, đổi đáp án, nộp sớm, thông báo tự động khi hết giờ (cả trên client thật), luyện tập, đổi mật khẩu và dữ liệu sau restart. Phần kiểm thử luồng thi riêng dùng `EXAM_SKIP_SEED=1` để có ngân hàng câu hỏi xác định.
-
-## Dữ liệu từ project cũ
-
-Nếu muốn lấy ngân hàng câu hỏi từ `NetProgramming-main/test_system.db`, chạy server mới một lần để tạo schema rồi **dừng server**. Sau đó chạy:
-
-```powershell
-python tools/import_questions.py ..\NetProgramming-main\test_system.db exam.db
-```
-
-Script chỉ lấy câu hỏi hợp lệ và bỏ qua câu trùng. Nó có thể thêm câu hỏi từ project cũ bên cạnh 20 câu mẫu; nếu chỉ muốn dùng câu hỏi cũ, khởi động server lần đầu với `EXAM_SKIP_SEED=1`. Script không chuyển tài khoản, phòng và lượt thi cũ vì cấu trúc vòng đời và mật khẩu của bản mới khác bản cũ.
 
 ## Giới hạn triển khai
 
