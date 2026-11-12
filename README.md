@@ -76,7 +76,9 @@ Câu hỏi mẫu chỉ được nạp khi bảng `questions` đang rỗng; khở
 
 `EXAM_ADMIN_CODE` mặc định là `admin123` nếu không đặt biến môi trường; nên đặt mã khác khi demo. Server mặc định dùng cổng `9000` và `exam.db`. Client mặc định kết nối `127.0.0.1:9000`.
 
-## Giao thức TCP
+## Giao thức ứng dụng trên TCP
+
+Xem [protocol.md](protocol.md) để biết cấu trúc khung, từng lệnh/phản hồi, quyền truy cập và máy trạng thái. Server gửi đủ câu hỏi và bốn lựa chọn A–D; đáp án đúng chỉ được giữ ở server. Mỗi tài khoản chỉ có một phiên đăng nhập đang hoạt động.
 
 Mỗi thông điệp: `uint32` big-endian ghi số byte nội dung, tiếp theo là đúng số byte nội dung. Lệnh và tham số trong nội dung cách nhau bằng `|`. Trường người dùng không được có `|`, `\r`, `\n`. Phản hồi bắt đầu bằng `OK`, `ERR`, `ROOMS`, `EXAM`, `SCORE`, `RESULTS`, `PRACTICE`, `Q`, `PSCORE`, `PSTATUS` hoặc `FINISHED`. `EVENT|AUTO_SCORE` là thông báo tự động của server, có thể đến giữa hai phản hồi lệnh; client phân biệt nó bằng luồng nhận riêng. `WAIT` là long polling: sau tối đa 30 giây nếu chủ phòng chưa bắt đầu, server trả `WAITING` và client gửi lại.
 

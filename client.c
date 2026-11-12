@@ -204,6 +204,8 @@ static void exam_menu(const char *name, char *payload) {
         line = next ? next + 1 : NULL;
     }
     if (loaded != count) { puts("Incomplete exam data."); return; }
+    puts("\nExam questions and options:");
+    for (int i = 0; i < count; ++i) print_question(i + 1, &questions[i]);
     char input[32], choice[12], msg[160];
     for (; !stdin_closed;) {
         snprintf(msg, sizeof(msg), "STATUS|%s", name);

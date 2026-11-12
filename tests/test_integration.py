@@ -125,6 +125,14 @@ def test_full_flow():
             assert admin.ask("LOGIN|teacher|pw") == "OK|LOGIN|admin"
             assert student.ask("LOGIN|alice|pw") == "OK|LOGIN|student"
             assert stranger.ask("LOGIN|bob|pw") == "OK|LOGIN|student"
+            duplicate = Peer(port)
+            assert duplicate.ask("LOGIN|alice|pw") == "ERR|ALREADY_LOGGED_IN"
+            assert duplicate.ask("LIST") == "ERR|LOGIN_REQUIRED"
+            assert student.ask("LOGOUT") == "OK|LOGOUT"
+            assert duplicate.ask("LOGIN|alice|pw") == "OK|LOGIN|student"
+            assert duplicate.ask("LOGOUT") == "OK|LOGOUT"
+            assert student.ask("LOGIN|alice|pw") == "OK|LOGIN|student"
+            duplicate.close()
             with closing(sqlite3.connect(db_path)) as check_db:
                 assert check_db.execute("SELECT password FROM users WHERE username='alice'").fetchone()[0].startswith("pbkdf2$")
             # Two frames in one TCP write must still produce two responses.
@@ -141,8 +149,26 @@ def test_full_flow():
             ]
             for q in questions:
                 assert admin.ask(q).startswith("OK|QUESTION|")
+            assert admin.ask("CREATE|disconnect_room|1|30") == "OK|ROOM|WAITING"
+            waiting_user = Peer(port)
+            assert waiting_user.ask("REGISTER|waiting_user|pw|student|") == "OK|REGISTERED"
+            assert waiting_user.ask("LOGIN|waiting_user|pw") == "OK|LOGIN|student"
+            assert waiting_user.ask("JOIN|disconnect_room") == "OK|JOINED"
+            wait_message = b"WAIT|disconnect_room"
+            waiting_user.sock.sendall(struct.pack("!I", len(wait_message)) + wait_message)
+            waiting_user.close()
+            resumed = Peer(port)
+            for _ in range(20):
+                login_result = resumed.ask("LOGIN|waiting_user|pw")
+                if login_result == "OK|LOGIN|student":
+                    break
+                assert login_result == "ERR|ALREADY_LOGGED_IN"
+                time.sleep(.1)
+            assert login_result == "OK|LOGIN|student"
+            assert resumed.ask("LOGOUT") == "OK|LOGOUT"
+            resumed.close()
             ui = subprocess.run([str(CLIENT), "127.0.0.1", str(port)],
-                                input="2\nalice\npw\n6\n1\n10\nA\ny\n0\n",
+                                input="1\npractice_ui\npw\nstudent\n2\npractice_ui\npw\n6\n1\n10\nA\ny\n0\n",
                                 text=True, capture_output=True, timeout=10, cwd=ROOT)
             assert ui.returncode == 0 and "PSCORE|" in ui.stdout, ui.stdout + ui.stderr
             assert student.ask("ADDQ|x|a|b|c|d|A|t|easy") == "ERR|FORBIDDEN"
@@ -159,6 +185,9 @@ def test_full_flow():
             waiter.join(3)
             assert result and result[0].startswith("EXAM|midterm|")
             assert result[0].count("\nQ|") == 2
+            for row in result[0].splitlines()[1:]:
+                parts = row.split("|")
+                assert len(parts) == 8 and all(parts[3:7])
             assert stranger.ask("JOIN|midterm") == "ERR|ROOM_NOT_WAITING"
             assert "R|midterm|RUNNING|2|30|teacher" in admin.ask("LIST")
             for row in result[0].splitlines()[1:]:
@@ -167,13 +196,13 @@ def test_full_flow():
                 correct = {"2+2=?": "B", "Capital of France?": "A", "TCP is?": "A"}[parts[2]]
                 assert student.ask(f"ANSWER|midterm|{pos}|D") == "OK|ANSWER_SAVED"
                 assert student.ask(f"ANSWER|midterm|{pos}|{correct}") == "OK|ANSWER_SAVED"
-            rejoined = Peer(port)
-            assert rejoined.ask("LOGIN|alice|pw") == "OK|LOGIN|student"
-            restored = rejoined.ask("EXAM|midterm")
+            student.close()
+            student = Peer(port)
+            assert student.ask("LOGIN|alice|pw") == "OK|LOGIN|student"
+            restored = student.ask("EXAM|midterm")
             for row in restored.splitlines()[1:]:
                 parts = row.split("|")
                 assert parts[-1] == {"2+2=?": "B", "Capital of France?": "A", "TCP is?": "A"}[parts[2]]
-            rejoined.close()
             assert student.ask("SUBMIT|midterm") == "SCORE|2|2"
             assert "R|midterm|FINISHED|2|30|teacher" in admin.ask("LIST")
             assert "R|alice|2|2|0" in admin.ask("RESULTS|midterm")
@@ -203,6 +232,7 @@ def test_full_flow():
             assert admin.ask("RESULTS|group") == "ERR|ROOM_NOT_FINISHED"
             assert stranger.ask("SUBMIT|group") == "SCORE|0|1"
             assert admin.ask("RESULTS|group").count("\nR|") == 2
+            stranger.close()
 
             assert admin.ask("CREATE|timed|1|10") == "OK|ROOM|WAITING"
             assert student.ask("JOIN|timed") == "OK|JOINED"
@@ -220,7 +250,7 @@ def test_full_flow():
             time.sleep(11)
             assert student.recv() == "EVENT|AUTO_SCORE|timed|0|1"
             ui_out, ui_err = ui_waiter.communicate(input="0\n", timeout=5)
-            assert ui_waiter.returncode == 0 and "[Server] Time is up in timed." in ui_out, ui_out + ui_err
+            assert ui_waiter.returncode == 0 and "[Server] Time is up in timed." in ui_out and " A. " in ui_out, ui_out + ui_err
             assert student.ask("STATUS|timed") == "SCORE|0|1"
             assert student.ask(f"PSTATUS|{auto_pid}") == "PSCORE|0|1"
             assert "R|alice|0|1|1" in admin.ask("RESULTS|timed")
@@ -229,7 +259,7 @@ def test_full_flow():
             assert student.ask("LOGOUT") == "OK|LOGOUT"
             assert student.ask("LOGIN|alice|pw") == "ERR|CREDENTIALS"
             assert student.ask("LOGIN|alice|newpw") == "OK|LOGIN|student"
-            admin.close(); student.close(); stranger.close()
+            admin.close(); student.close()
         finally:
             stop_server(server)
         with closing(sqlite3.connect(db_path)) as check_db:

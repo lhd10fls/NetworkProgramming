@@ -9,6 +9,9 @@
 #include <stdarg.h>
 #include <time.h>
 #include <ctype.h>
+#ifndef _WIN32
+#include <sys/select.h>
+#endif
 
 #define MAX_USERS 32
 #define MAX_QUESTIONS 50
@@ -28,6 +31,29 @@ typedef struct {
 } Client;
 static Client *active_clients[256];
 static int active_count;
+
+/* Called while db_mutex is held, as are updates to the active client list. */
+static int has_active_session(int user_id, const Client *current) {
+    for (int i = 0; i < active_count; ++i)
+        if (active_clients[i] != current && active_clients[i]->user_id == user_id) return 1;
+    return 0;
+}
+
+/* Notice a closed peer while WAIT is long-polling, so its session is released promptly. */
+static int peer_closed(socket_t s) {
+    fd_set ready_set;
+    FD_ZERO(&ready_set);
+    FD_SET(s, &ready_set);
+    struct timeval timeout = {0, 0};
+#ifdef _WIN32
+    int ready = select(0, &ready_set, NULL, NULL, &timeout);
+#else
+    int ready = select(s + 1, &ready_set, NULL, NULL, &timeout);
+#endif
+    if (ready <= 0) return 0;
+    char byte;
+    return recv(s, &byte, 1, MSG_PEEK) == 0;
+}
 
 static int send_to_client(Client *c, const char *message) {
     pthread_mutex_lock(&c->send_mutex);
@@ -256,11 +282,17 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         if (!prep(&s, "SELECT id,role,password FROM users WHERE username=?")) { strcpy(out, "ERR|DB"); return; }
         sqlite3_bind_text(s, 1, v[1], -1, SQLITE_TRANSIENT);
         if (sqlite3_step(s) == SQLITE_ROW && password_verify(v[2], (const char *)sqlite3_column_text(s, 2))) {
-            c->user_id = sqlite3_column_int(s, 0);
-            snprintf(c->role, sizeof(c->role), "%s", sqlite3_column_text(s, 1));
-            snprintf(c->username, sizeof(c->username), "%s", v[1]);
-            snprintf(out, cap, "OK|LOGIN|%s", c->role);
-            log_event(c->user_id, "LOGIN", "success");
+            int user_id = sqlite3_column_int(s, 0);
+            if (has_active_session(user_id, c)) {
+                strcpy(out, "ERR|ALREADY_LOGGED_IN");
+                log_event(user_id, "LOGIN_REJECTED_ACTIVE", "already connected");
+            } else {
+                c->user_id = user_id;
+                snprintf(c->role, sizeof(c->role), "%s", sqlite3_column_text(s, 1));
+                snprintf(c->username, sizeof(c->username), "%s", v[1]);
+                snprintf(out, cap, "OK|LOGIN|%s", c->role);
+                log_event(c->user_id, "LOGIN", "success");
+            }
         } else { strcpy(out, "ERR|CREDENTIALS"); log_event(0, "LOGIN_FAILED", v[1]); }
         sqlite3_finalize(s); return;
     }
@@ -554,9 +586,11 @@ static void *client_thread(void *arg) {
     while (recv_frame(c->sock, request, sizeof(request))) {
         char *v[16]; int n = fields(request, v, 16);
         int wait = n == 2 && !strcmp(v[0], "WAIT");
+        int disconnected = 0;
         if (wait) {
             /* Long polling: a participant is notified with the entire exam as soon as START runs. */
             for (int i = 0; i < 300; ++i) {
+                if (peer_closed(c->sock)) { disconnected = 1; break; }
                 pthread_mutex_lock(&db_mutex);
                 finish_expired();
                 dispatch(c, v, n, response, sizeof(response));
@@ -571,6 +605,7 @@ static void *client_thread(void *arg) {
             else dispatch(c, v, n, response, sizeof(response));
             pthread_mutex_unlock(&db_mutex);
         }
+        if (disconnected) break;
         if (!send_to_client(c, response)) break;
     }
     pthread_mutex_lock(&db_mutex);
