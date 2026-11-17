@@ -11,7 +11,6 @@ Tài liệu này mô tả **giao thức ứng dụng do project thiết kế**, 
 | Kết nối | Một kết nối gắn với tối đa một phiên đăng nhập; mỗi tài khoản chỉ có một phiên đang hoạt động trên server. LOGOUT hoặc đóng socket giải phóng phiên. |
 | Dữ liệu bền vững | Tài khoản, câu hỏi, phòng, đáp án và kết quả lưu trong SQLite; phiên TCP không được khôi phục sau khi ngắt kết nối. |
 
-Nguồn code: **net.c/net.h** (đóng khung), **server.c** (xử lý lệnh và trạng thái), **client.c** (gửi yêu cầu và nhận phản hồi/sự kiện).
 
 ## 2. Khung thông điệp trên TCP
 
@@ -23,14 +22,13 @@ Offset    Kích thước    Ý nghĩa
 4         L byte        Nội dung thông điệp
 ~~~
 
-- **L tính bằng byte**, không phải số ký tự; nội dung tối đa **65.536 byte** (MAX_FRAME ở net.h:22).
+- **L tính bằng byte**, không phải số ký tự; nội dung tối đa **65.536 byte**.
 - Phía gửi dùng **htonl**, phía nhận dùng **ntohl** để chuyển network byte order.
 - **send_all/recv_all** lặp cho đến khi chuyển đủ 4 byte đầu và đủ L byte nội dung; không giả định một lệnh send/recv chuyển hết thông điệp.
 - Nội dung là văn bản theo quy ước UTF-8. Code hiện xử lý chuỗi byte C và **chưa xác minh UTF-8 hợp lệ**. Không gửi byte NUL trong nội dung.
 - Ví dụ LIST có L = 4: **00 00 00 04 4C 49 53 54** (hex).
 - Nếu khung vượt giới hạn, nhận thiếu dữ liệu hoặc kết nối đóng, recv_frame trả thất bại và luồng xử lý kết thúc; không bảo đảm có phản hồi ERR.
 
-**Vị trí code:** net.c:32–63; net.h:22–28. **Kiểm thử:** tests/test_integration.py:122 gửi khung thành từng byte; :138–142 gửi hai khung trong một lần ghi.
 
 ## 3. Cú pháp nội dung và quy tắc trao đổi
 
@@ -49,7 +47,6 @@ Phản hồi thành công: một trong các định dạng ở mục 5 và 6
 - Một yêu cầu có một phản hồi chính. **EVENT|AUTO_SCORE** là sự kiện bất đồng bộ, có thể đến giữa yêu cầu và phản hồi; client phải tách sự kiện này ra khi nhận.
 - Lệnh **WAIT** có thể giữ yêu cầu tối đa khoảng 30 giây khi phòng chưa bắt đầu; sau đó server trả WAITING và client gửi WAIT lại.
 
-**Vị trí code:** server.c:100–110, 260–561, 575–606; client.c:25–87.
 
 ## 4. Phiên và quyền truy cập
 
@@ -64,11 +61,10 @@ Trước khi đăng nhập, chỉ **REGISTER** và **LOGIN** được xử lý; 
 | RESULTS | Chủ phòng hoặc người đã JOIN, sau khi phòng FINISHED. |
 | PQUESTION, PANSWER, PSUBMIT, PSTATUS | Chỉ chủ sở hữu bài luyện tập. |
 
-**Vị trí code:** server.c:36–56, 280–304, 325–327, 367–407, 420–483, 510–560. **Kiểm thử phiên:** tests/test_integration.py:128–135 và :152–169.
 
 ## 5. Danh mục lệnh và phản hồi
 
-Ký hiệu: **name** = tên phòng, **count** = số câu, **duration** = thời lượng giây, **pos** = số thứ tự câu bắt đầu từ 1, **choice** = A/B/C/D, **id** = mã bài luyện tập. Các mã lỗi liệt kê ở mục 8.
+Ký hiệu: **name** = tên phòng, **count** = số câu, **duration** = thời lượng giây, **pos** = số thứ tự câu bắt đầu từ 1, **choice** = A/B/C/D, **id** = mã bài luyện tập. 
 
 ### 5.1. Tài khoản và câu hỏi
 
@@ -104,8 +100,6 @@ Ký hiệu: **name** = tên phòng, **count** = số câu, **duration** = thời
 | PANSWER\|id\|pos\|choice | Đúng chủ bài, bài còn thời gian; gửi lại cùng pos để đổi đáp án. | OK\|ANSWER_SAVED |
 | PSUBMIT\|id | Đúng chủ bài; nộp sớm hoặc lấy điểm đã lưu. | PSCORE\|correct\|total |
 | PSTATUS\|id | Đúng chủ bài; xem bài còn chạy hay đã có điểm. | PSTATUS\|RUNNING\|end_at hoặc PSCORE\|correct\|total |
-
-**Vị trí code:** server.c:264–561; client.c:99–305.
 
 ## 6. Phản hồi nhiều dòng và sự kiện
 
@@ -151,7 +145,6 @@ EVENT|AUTO_SCORE|PhongA|1|2
 
 Sự kiện này được gửi tới kết nối còn hoạt động của người chưa nộp khi phòng hết giờ. Nó **không phải phản hồi của yêu cầu ngay trước đó**. Client cần nhận diện tiền tố EVENT|AUTO_SCORE|, hiển thị điểm và tiếp tục đợi phản hồi chính. Người đã mất kết nối có thể LOGIN lại rồi gửi STATUS để lấy điểm đã lưu. Luyện tập không có sự kiện tự động riêng; dùng PSTATUS hoặc PSUBMIT để lấy điểm.
 
-**Vị trí code:** server.c:173–185, 198–237; client.c:25–48, 191–260.
 
 ## 7. Trạng thái và trình tự thông điệp
 
@@ -260,31 +253,3 @@ Mọi lỗi ứng dụng có dạng **ERR|CODE**. Không phải lệnh nào cũn
 | DB | Lỗi thao tác SQLite. |
 
 Lỗi khung TCP hoặc mất kết nối có thể làm recv_frame thất bại và đóng luồng xử lý mà không gửi ERR.
-
-## 9. Quyết định thiết kế và giới hạn
-
-1. **TCP + length prefix:** TCP truyền có thứ tự và tin cậy nhưng chỉ cung cấp luồng byte; độ dài 4 byte xác định ranh giới từng thông điệp ứng dụng.
-2. **Nội dung dạng văn bản:** dễ đọc và demo. Vì dùng dấu | phân trường, các trường không được chứa dấu này hoặc xuống dòng; hiện chưa có escaping.
-3. **Request/response + sự kiện:** lệnh thường có một phản hồi; sự kiện hết giờ cần được server gửi chủ động nên có EVENT riêng.
-4. **Phiên gắn với socket:** user_id/role được giữ phía server; LOGIN đồng thời cùng tài khoản bị từ chối. Đăng xuất hoặc ngắt kết nối giải phóng phiên; dữ liệu bài làm vẫn trong SQLite.
-5. **An toàn:** mật khẩu được băm khi lưu nhưng hiện truyền qua TCP chưa mã hóa TLS. Chỉ nên demo trên mạng tin cậy.
-6. **Khả năng mở rộng:** chưa có trường phiên bản giao thức, request ID, escaping, TLS, nén hoặc khung lớn hơn MAX_FRAME. Tối đa 50 câu/phòng, 32 người/phòng; thời lượng 10–86.400 giây.
-
-Những giới hạn này mô tả code đang chạy, không phải các tính năng đã triển khai.
-
-## 10. Vị trí triển khai, kiểm thử và liên hệ bài giảng
-
-| Thành phần | Vị trí |
-|---|---|
-| Khung TCP, byte order, gửi/nhận đủ byte | net.h:22–28; net.c:32–63 |
-| Tách trường và kiểm tra dữ liệu | server.c:94–110; net.c:64–70 |
-| Phiên đăng nhập, chặn trùng tài khoản | server.c:24–41, 280–304 |
-| Lệnh, quyền, phòng thi, luyện tập | server.c:260–561 |
-| Chấm bài, hết giờ, sự kiện tự động | server.c:153–263, 564–572 |
-| Vòng đời socket server và xử lý từng client | server.c:575–658 |
-| Giao diện thi và bốn lựa chọn | client.c:173–262 |
-| Kiểm thử tích hợp | tests/test_integration.py |
-
-Sau khi biên dịch, chạy **python tests/test_integration.py**. Bộ kiểm thử dùng server/client thật để kiểm tra chia/gộp khung, đăng nhập và chặn trùng tài khoản, quyền, các lựa chọn A–D trong đề, hiển thị client, phòng thi, luyện tập, nộp sớm, tự nộp, EVENT và dữ liệu sau restart.
-
-**Liên hệ bài giảng:** lec02 slide 17 nêu loại, cú pháp, ý nghĩa và quy tắc trao đổi thông điệp; lec04 slide 48 nêu length prefixing để xử lý luồng byte TCP; lec04 slide 53–64 trình bày định dạng, trình tự, cách xử lý và máy trạng thái giao thức. Tài liệu này cụ thể hóa những nội dung đó cho ứng dụng thi trắc nghiệm.
