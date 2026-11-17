@@ -7,26 +7,26 @@ typedef struct {
 } SeedQuestion;
 
 static const SeedQuestion starter_questions[] = {
-    {"Which protocol provides reliable, ordered delivery?", "UDP", "TCP", "IP", "ARP", "B", "network", "easy"},
-    {"Which protocol is connectionless?", "TCP", "TLS", "UDP", "SSH", "C", "network", "easy"},
-    {"What does a TCP server call to wait for a new client?", "bind", "listen", "accept", "connect", "C", "socket", "easy"},
-    {"Which call associates a socket with a local address?", "bind", "send", "recv", "close", "A", "socket", "easy"},
-    {"Which call starts a client connection to a TCP server?", "accept", "listen", "connect", "select", "C", "socket", "easy"},
-    {"What does recv return when a TCP peer closes cleanly?", "-2", "0", "1", "The port number", "B", "socket", "medium"},
-    {"Why can a single recv call return less data than requested?", "TCP is a byte stream", "SQLite is locked", "The port changed", "The IP expired", "A", "network", "medium"},
-    {"What does htonl convert?", "A string to a number", "Host to network byte order", "A hostname to an IP", "A socket to a file", "B", "network", "medium"},
-    {"Which address refers to the same computer?", "8.8.8.8", "255.255.255.255", "127.0.0.1", "0.0.0.0", "C", "network", "easy"},
-    {"What identifies a service on a host along with its IP address?", "A port", "A table", "A password", "A thread", "A", "network", "easy"},
-    {"Which IP version uses 128-bit addresses?", "IPv4", "IPv6", "TCP", "DNS", "B", "network", "easy"},
-    {"Which protocol commonly resolves a domain name to an IP address?", "FTP", "SMTP", "DNS", "HTTP", "C", "network", "easy"},
-    {"What does a mutex protect in a multithreaded program?", "Shared state", "A network cable", "A disk partition", "A compiler", "A", "concurrency", "medium"},
-    {"Which SQL command retrieves rows from a table?", "INSERT", "SELECT", "UPDATE", "DELETE", "B", "database", "easy"},
-    {"What does a database transaction help guarantee?", "Atomic changes", "Faster Wi-Fi", "Encrypted TCP", "New ports", "A", "database", "medium"},
-    {"Why use SQL parameters instead of joining user text into a query?", "To avoid SQL injection", "To open a socket", "To create threads", "To sort IPs", "A", "database", "medium"},
-    {"Why store a password hash with a unique salt?", "To reduce reuse of precomputed attacks", "To reveal the password", "To change the port", "To compress the database", "A", "security", "medium"},
-    {"Which of these adds encryption to a TCP connection?", "TLS", "SQLite", "DNS", "ARP", "A", "security", "easy"},
-    {"What does the C11 sizeof operator report?", "Bytes occupied by a type or object", "Number of TCP packets", "Length of a C string", "Number of database rows", "A", "c", "easy"},
-    {"Which standard C function allocates memory dynamically?", "printf", "fopen", "malloc", "strcmp", "C", "c", "easy"}
+    {"2 + 3 bằng bao nhiêu?", "4", "5", "6", "7", "B", "toan_hoc", "easy"},
+    {"10 - 4 bằng bao nhiêu?", "4", "5", "6", "7", "C", "toan_hoc", "easy"},
+    {"3 nhân 2 bằng bao nhiêu?", "6", "5", "7", "8", "A", "toan_hoc", "easy"},
+    {"Hình tam giác có mấy cạnh?", "2", "4", "5", "3", "D", "toan_hoc", "easy"},
+    {"Một giờ có bao nhiêu phút?", "30", "45", "60", "90", "C", "toan_hoc", "easy"},
+    {"Một tuần có mấy ngày?", "5", "7", "6", "8", "B", "doi_song", "easy"},
+    {"Một năm có mấy tháng?", "12", "10", "11", "13", "A", "doi_song", "easy"},
+    {"Con vật nào kêu meo meo?", "Chó", "Gà", "Vịt", "Mèo", "D", "con_vat", "easy"},
+    {"Con vật nào thường cho sữa?", "Gà", "Vịt", "Bò", "Cá", "C", "con_vat", "easy"},
+    {"Con vật nào sống dưới nước?", "Cá", "Chó", "Mèo", "Gà", "A", "con_vat", "easy"},
+    {"Con vật nào có vòi dài?", "Hổ", "Voi", "Thỏ", "Mèo", "B", "con_vat", "easy"},
+    {"Bộ phận nào của cây hút nước?", "Lá", "Hoa", "Quả", "Rễ", "D", "cay_coi", "easy"},
+    {"Cây nào cho hạt gạo?", "Cây lúa", "Cây cam", "Cây xoài", "Cây dừa", "A", "cay_coi", "easy"},
+    {"Quả nào thường vàng khi chín?", "Dưa hấu", "Chuối", "Cà tím", "Thanh long", "B", "cay_coi", "easy"},
+    {"Cây xanh cần gì để quang hợp?", "Muối", "Dầu ăn", "Ánh sáng", "Nhựa", "C", "cay_coi", "easy"},
+    {"Đèn giao thông màu đỏ yêu cầu gì?", "Dừng lại", "Đi tiếp", "Tăng tốc", "Vượt xe", "A", "doi_song", "easy"},
+    {"Khi sang đường, nên đi ở đâu?", "Giữa đường", "Chỗ khuất", "Lòng đường", "Vạch qua đường", "D", "doi_song", "easy"},
+    {"Trước khi ăn, ta nên làm gì?", "Đi ngủ", "Rửa tay", "Chơi game", "Chạy bộ", "B", "doi_song", "easy"},
+    {"Dùng vật nào để xem giờ?", "Cái bát", "Cái thìa", "Đồng hồ", "Quyển vở", "C", "doi_song", "easy"},
+    {"Sữa chua thường được làm từ gì?", "Gạo", "Ngô", "Khoai", "Sữa", "D", "doi_song", "easy"}
 };
 
 int seed_questions(sqlite3 *db) {

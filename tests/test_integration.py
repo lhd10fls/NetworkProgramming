@@ -91,13 +91,28 @@ def test_starter_bank():
         server = start_server(port, db_path, seed=True)
         try:
             with closing(sqlite3.connect(db_path)) as check_db:
-                assert check_db.execute("SELECT COUNT(*) FROM questions").fetchone()[0] == 20
+                rows = check_db.execute("SELECT text,a,b,c,d,correct,topic FROM questions").fetchall()
+                assert len(rows) == 20
+                assert {row[6] for row in rows} == {"toan_hoc", "con_vat", "cay_coi", "doi_song"}
+                for text, a, b, c, d, correct, _ in rows:
+                    assert any(ord(char) > 127 for char in text)
+                    assert len(text.encode("utf-8")) <= 200
+                    assert all(option and len(option.encode("utf-8")) <= 100 for option in (a, b, c, d))
+                    assert correct in "ABCD"
             student = Peer(port)
             assert student.ask("REGISTER|seed_user|pw|student|") == "OK|REGISTERED"
             assert student.ask("LOGIN|seed_user|pw") == "OK|LOGIN|student"
             assert student.ask("CREATE|starter_room|20|30") == "OK|ROOM|WAITING"
-            assert student.ask("PRACTICE|20|30").startswith("PRACTICE|")
+            practice = student.ask("PRACTICE|20|30")
+            assert practice.startswith("PRACTICE|")
+            question = student.ask(f"PQUESTION|{practice.split('|')[1]}|1")
+            assert question.startswith("Q|1|") and any(ord(char) > 127 for char in question)
             student.close()
+            ui = subprocess.run([str(CLIENT), "127.0.0.1", str(port)],
+                                input="1\nseed_ui\npw\nstudent\n2\nseed_ui\npw\n6\n1\n20\nA\ny\n0\n",
+                                text=True, encoding="utf-8", capture_output=True, timeout=10, cwd=ROOT)
+            assert ui.returncode == 0 and "PSCORE|" in ui.stdout
+            assert any(ord(char) > 127 for char in ui.stdout)
         finally:
             stop_server(server)
         server = start_server(port, db_path, seed=True)

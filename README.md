@@ -4,7 +4,7 @@
 
 ## Luồng hoạt động
 
-1. Server mở `exam.db`, tạo bảng nếu đây là lần chạy đầu và nạp **20 câu hỏi mẫu** khi ngân hàng câu hỏi còn rỗng. Server lắng nghe cổng 9000 và tạo một luồng cho mỗi client.
+1. Server mở `question.db`, tạo bảng nếu đây là lần chạy đầu và nạp **20 câu hỏi mẫu** khi ngân hàng câu hỏi còn rỗng. Server lắng nghe cổng 9000 và tạo một luồng cho mỗi client.
 2. Người dùng đăng ký, đăng nhập. Tài khoản nào cũng có thể tạo phòng; chỉ **chủ phòng** được bắt đầu phòng. Admin được thêm câu hỏi vào ngân hàng.
 3. Chủ phòng tạo phòng với số câu và thời lượng. Server chỉ tạo nếu ngân hàng có đủ câu; câu hỏi được chọn ngẫu nhiên và cố định cho phòng. Trạng thái đầu tiên là `WAITING`.
 4. Người thi `JOIN` khi phòng còn `WAITING`. Client gửi `WAIT` và chờ. Khi chủ phòng gửi `START`, server đặt một `end_at` chung và trả **toàn bộ đề** cho các client đang chờ. Trạng thái chuyển thành `RUNNING`.
@@ -61,7 +61,7 @@ Mở ít nhất ba terminal:
 ```powershell
 # Terminal 1
 $env:EXAM_ADMIN_CODE='ma-bi-mat-cua-nhom'
-.\server.exe 9000 exam.db
+.\server.exe 9000 question.db
 
 # Terminal 2: người tạo phòng
 .\client.exe 127.0.0.1 9000
@@ -70,11 +70,11 @@ $env:EXAM_ADMIN_CODE='ma-bi-mat-cua-nhom'
 .\client.exe 127.0.0.1 9000
 ```
 
-Trong terminal 2, đăng ký và đăng nhập, rồi chọn **Create room**. Khi khởi tạo database rỗng, server nạp 20 câu hỏi mẫu về C, mạng, cơ sở dữ liệu và bảo mật; có thể tạo phòng hoặc luyện tập ngay. Nếu muốn tự thêm câu hỏi, đăng ký admin bằng mã đã đặt rồi chọn **Add question**. Tài khoản student cũng có quyền tạo phòng, nhưng không có quyền thêm câu hỏi. Trong terminal 3, đăng ký và đăng nhập, chọn **Join room**. Client sẽ chờ. Quay về terminal 2, chọn **Start room**; terminal 3 nhận đề và bắt đầu làm. Sau khi nộp hoặc hết giờ, dùng **Results** để xem điểm.
+Trong terminal 2, đăng ký và đăng nhập, rồi chọn **Create room**. Khi khởi tạo database rỗng, server nạp 20 câu hỏi mẫu **bằng tiếng Việt** về toán học, con vật, cây cối và đời sống; có thể tạo phòng hoặc luyện tập ngay. Client Windows đặt bảng mã console UTF-8 để hiển thị dấu tiếng Việt. Nếu muốn tự thêm câu hỏi, đăng ký admin bằng mã đã đặt rồi chọn **Add question**. Tài khoản student cũng có quyền tạo phòng, nhưng không có quyền thêm câu hỏi. Trong terminal 3, đăng ký và đăng nhập, chọn **Join room**. Client sẽ chờ. Quay về terminal 2, chọn **Start room**; terminal 3 nhận đề và bắt đầu làm. Sau khi nộp hoặc hết giờ, dùng **Results** để xem điểm.
 
-Câu hỏi mẫu chỉ được nạp khi bảng `questions` đang rỗng; khởi động lại server không tạo thêm bản sao. Muốn dùng ngân hàng câu hỏi tự chuẩn bị, đặt `EXAM_SKIP_SEED=1` trước khi chạy server lần đầu, sau đó thêm câu qua tài khoản admin.
+Câu hỏi mẫu chỉ được nạp khi bảng `questions` đang rỗng; khởi động lại server không tạo thêm bản sao. File `question.db` dùng cho bộ 20 câu tiếng Việt mới và được tạo tự động nếu chưa có. Các database demo cũ không bị thay đổi; nếu truyền tên file database khác khi chạy server, chương trình sẽ dùng nội dung của file đó. Muốn dùng ngân hàng câu hỏi tự chuẩn bị, đặt `EXAM_SKIP_SEED=1` trước khi chạy server lần đầu, sau đó thêm câu qua tài khoản admin.
 
-`EXAM_ADMIN_CODE` mặc định là `admin123` nếu không đặt biến môi trường; nên đặt mã khác khi demo. Server mặc định dùng cổng `9000` và `exam.db`. Client mặc định kết nối `127.0.0.1:9000`.
+`EXAM_ADMIN_CODE` mặc định là `admin123` nếu không đặt biến môi trường; nên đặt mã khác khi demo. Server mặc định dùng cổng `9000` và `question.db`. Client mặc định kết nối `127.0.0.1:9000`.
 
 ## Giao thức ứng dụng trên TCP
 

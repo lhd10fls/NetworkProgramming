@@ -625,7 +625,7 @@ static void *client_thread(void *arg) {
 int main(int argc, char **argv) {
     int port = 9000;
     if (argc > 1 && !number(argv[1], 1, 65535, &port)) { fprintf(stderr, "Invalid port\n"); return 1; }
-    const char *path = argc > 2 ? argv[2] : "exam.db";
+    const char *path = argc > 2 ? argv[2] : "question.db";
     admin_code = getenv("EXAM_ADMIN_CODE");
     if (!admin_code || !*admin_code) admin_code = "admin123";
     if (!net_init() || !init_db(path)) { fprintf(stderr, "Startup failed\n"); return 1; }

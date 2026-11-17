@@ -270,7 +270,7 @@ Tài liệu này đối chiếu **13 tiêu chí, tổng 20 điểm** ở cột *
 1. **GUI:** ứng dụng là giao diện dòng lệnh trong client.c. GUI không thuộc 13 tiêu chí của file tiếng Việt; file tiếng Anh có nêu GUI riêng.
 2. **Lọc câu theo topic/difficulty:** bảng questions có hai cột này và ADDQ lưu được giá trị, nhưng CREATE/PRACTICE hiện chọn từ toàn ngân hàng, chưa có lựa chọn bộ lọc khi tạo bài. Đây là phần mở rộng của bản tiếng Anh.
 3. **Bảo mật mạng:** mật khẩu được băm khi lưu, nhưng đường truyền TCP không có TLS. Nên demo trên mạng tin cậy; cần TLS nếu triển khai ngoài môi trường học tập.
-4. **Câu hỏi mẫu:** 20 câu tiếng Anh được nhúng trong seed_questions.c để có thể thi ngay với database mới. Muốn dùng ngân hàng riêng, đặt EXAM_SKIP_SEED=1 trước lần chạy đầu rồi thêm câu qua admin hoặc dùng tools/import_questions.py.
+4. **Câu hỏi mẫu:** 20 câu tiếng Việt đơn giản về toán học, con vật, cây cối và đời sống được nhúng trong seed_questions.c. Server mặc định dùng question.db và tự tạo file này với bộ câu mới khi chưa có. Các database demo cũ giữ nguyên dữ liệu lịch sử. Muốn dùng ngân hàng riêng, đặt EXAM_SKIP_SEED=1 trước lần chạy đầu rồi thêm câu qua admin hoặc dùng tools/import_questions.py.
 5. **Nền tảng:** source biên dịch theo C11 nhưng dùng SQLite, pthread và API mạng của hệ điều hành. Windows cần MinGW và thư viện theo build-windows.ps1; Linux cần GCC, SQLite development headers, OpenSSL và pthread.
 
 ## Kết luận

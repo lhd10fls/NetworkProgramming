@@ -304,6 +304,10 @@ static void change_password(void) {
     if (request(msg)) puts(response);
 }
 int main(int argc, char **argv) {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
     setvbuf(stdin, NULL, _IONBF, 0);
     const char *host = argc > 1 ? argv[1] : "127.0.0.1";
     int port = argc > 2 ? atoi(argv[2]) : 9000;
