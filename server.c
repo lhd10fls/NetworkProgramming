@@ -303,37 +303,6 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         c->user_id = 0; c->username[0] = 0; c->role[0] = 0;
         strcpy(out, "OK|LOGOUT"); return;
     }
-    if (!strcmp(cmd, "CHPASS")) {
-        if (n != 3 || !valid_field(v[2], 128)) return;
-        if (!prep(&s, "SELECT password FROM users WHERE id=?")) { strcpy(out, "ERR|DB"); return; }
-        sqlite3_bind_int(s, 1, c->user_id);
-        int valid = sqlite3_step(s) == SQLITE_ROW && password_verify(v[1], (const char *)sqlite3_column_text(s, 0));
-        sqlite3_finalize(s);
-        if (!valid) { strcpy(out, "ERR|OLD_PASSWORD"); return; }
-        char password_value[128];
-        if (!password_hash(v[2], password_value)) { strcpy(out, "ERR|PASSWORD_HASH"); return; }
-        if (!prep(&s, "UPDATE users SET password=? WHERE id=?")) { strcpy(out, "ERR|DB"); return; }
-        sqlite3_bind_text(s, 1, password_value, -1, SQLITE_TRANSIENT);
-        sqlite3_bind_int(s, 2, c->user_id);
-        int ok = sqlite3_step(s) == SQLITE_DONE;
-        int changed = sqlite3_changes(db);
-        sqlite3_finalize(s);
-        if (ok && changed) { log_event(c->user_id, "PASSWORD_CHANGE", ""); strcpy(out, "OK|PASSWORD_CHANGED"); }
-        else strcpy(out, "ERR|OLD_PASSWORD");
-        return;
-    }
-    if (!strcmp(cmd, "ADDQ")) {
-        if (strcmp(c->role, "admin")) { strcpy(out, "ERR|FORBIDDEN"); return; }
-        if (n != 9) return;
-        for (int i = 1; i < 9; ++i) if (!valid_field(v[i], i == 1 ? 200 : 100)) return;
-        if (strlen(v[6]) != 1 || !strchr("ABCD", v[6][0])) return;
-        if (!prep(&s, "INSERT INTO questions(text,a,b,c,d,correct,topic,difficulty) VALUES(?,?,?,?,?,?,?,?)")) { strcpy(out, "ERR|DB"); return; }
-        for (int i = 1; i < 9; ++i) sqlite3_bind_text(s, i, v[i], -1, SQLITE_TRANSIENT);
-        int ok = sqlite3_step(s) == SQLITE_DONE; sqlite3_finalize(s);
-        if (!ok) { strcpy(out, "ERR|DB"); return; }
-        log_event(c->user_id, "ADD_QUESTION", v[1]);
-        snprintf(out, cap, "OK|QUESTION|%lld", (long long)sqlite3_last_insert_rowid(db)); return;
-    }
     if (!strcmp(cmd, "CREATE")) {
         int count, duration;
         if (n != 4 || !valid_field(v[1], 48) || !number(v[2], 1, MAX_QUESTIONS, &count) ||
@@ -623,6 +592,7 @@ static void *client_thread(void *arg) {
 }
 
 int main(int argc, char **argv) {
+    net_set_server_mode();
     int port = 9000;
     if (argc > 1 && !number(argv[1], 1, 65535, &port)) { fprintf(stderr, "Invalid port\n"); return 1; }
     const char *path = argc > 2 ? argv[2] : "question.db";

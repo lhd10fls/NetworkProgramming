@@ -120,7 +120,7 @@ static void login_user(void) {
 }
 static void list_rooms(void) {
     if (!request("LIST") || !ok("ROOMS")) return;
-    puts("Room | Status | Questions | Duration(s) | Owner");
+    puts("Room\tStatus\tQuestions\tDuration(s)\tOwner");
     char *line = strchr(response, '\n');
     while (line) {
         ++line; char *next = strchr(line, '\n');
@@ -152,7 +152,7 @@ static void show_results(void) {
     if (!clean(name, 48)) return;
     snprintf(msg, sizeof(msg), "RESULTS|%s", name);
     if (!request(msg) || !ok("RESULTS")) return;
-    puts("User | Correct | Total | Auto submitted");
+    puts("User\tCorrect\tTotal\tAuto submitted");
     char *line = strchr(response, '\n');
     while (line) {
         ++line; char *next = strchr(line, '\n');
@@ -283,26 +283,6 @@ static void practice(void) {
     snprintf(msg, sizeof(msg), "%s|%d", !strcmp(choice, "y") ? "PSUBMIT" : "PSTATUS", id);
     if (request(msg)) puts(response);
 }
-static void add_question(void) {
-    char field[8][220], msg[2000];
-    const char *labels[] = {"Question: ", "Option A: ", "Option B: ", "Option C: ", "Option D: ",
-                            "Correct option A/B/C/D: ", "Topic: ", "Difficulty: "};
-    for (int i = 0; i < 8; ++i) {
-        ask(labels[i], field[i], sizeof(field[i]));
-        if (!clean(field[i], i == 0 ? 200 : 100)) return;
-    }
-    for (int i = 0; i < 8; ++i) if (i == 5) field[i][0] = (char)toupper((unsigned char)field[i][0]);
-    snprintf(msg, sizeof(msg), "ADDQ|%s|%s|%s|%s|%s|%s|%s|%s",
-             field[0], field[1], field[2], field[3], field[4], field[5], field[6], field[7]);
-    if (request(msg)) puts(response);
-}
-static void change_password(void) {
-    char old[160], next[160], msg[400];
-    ask("Old password: ", old, sizeof(old)); ask("New password: ", next, sizeof(next));
-    if (!clean(old, 128) || !clean(next, 128)) return;
-    snprintf(msg, sizeof(msg), "CHPASS|%s|%s", old, next);
-    if (request(msg)) puts(response);
-}
 int main(int argc, char **argv) {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
@@ -327,7 +307,7 @@ int main(int argc, char **argv) {
             else if (!strcmp(choice, "2")) login_user();
             else if (!strcmp(choice, "0")) break;
         } else {
-            printf("\n%s (%s)\n1 List rooms  2 Create room  3 Join room  4 Start room\n5 Results  6 Practice  7 Add question  8 Change password  9 Logout  0 Exit\n", username, role);
+            printf("\n%s (%s)\n1 List rooms  2 Create room  3 Join room  4 Start room\n5 Results  6 Practice  9 Logout  0 Exit\n", username, role);
             ask("> ", choice, sizeof(choice));
             if (!strcmp(choice, "1")) list_rooms();
             else if (!strcmp(choice, "2")) create_room();
@@ -335,8 +315,6 @@ int main(int argc, char **argv) {
             else if (!strcmp(choice, "4")) start_room();
             else if (!strcmp(choice, "5")) show_results();
             else if (!strcmp(choice, "6")) practice();
-            else if (!strcmp(choice, "7")) add_question();
-            else if (!strcmp(choice, "8")) change_password();
             else if (!strcmp(choice, "9")) { if (request("LOGOUT")) puts(response); username[0] = role[0] = 0; }
             else if (!strcmp(choice, "0")) break;
         }

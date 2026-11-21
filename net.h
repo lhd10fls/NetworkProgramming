@@ -21,6 +21,7 @@ typedef int socket_t;
 
 #define MAX_FRAME 65536u
 int net_init(void);
+void net_set_server_mode(void);
 void net_cleanup(void);
 int send_frame(socket_t sock, const char *message);
 int recv_frame(socket_t sock, char *out, size_t capacity);

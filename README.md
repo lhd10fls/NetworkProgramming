@@ -4,35 +4,23 @@
 
 ## Luồng hoạt động
 
+Xem [session.md](session.md) để theo dõi chi tiết từng giai đoạn, thông điệp trao đổi, trạng thái và nơi lưu dữ liệu.
+
 1. Server mở `question.db`, tạo bảng nếu đây là lần chạy đầu và nạp **20 câu hỏi mẫu** khi ngân hàng câu hỏi còn rỗng. Server lắng nghe cổng 9000 và tạo một luồng cho mỗi client.
-2. Người dùng đăng ký, đăng nhập. Tài khoản nào cũng có thể tạo phòng; chỉ **chủ phòng** được bắt đầu phòng. Admin được thêm câu hỏi vào ngân hàng.
+2. Người dùng đăng ký, đăng nhập. Tài khoản nào cũng có thể tạo phòng; chỉ **chủ phòng** được bắt đầu phòng. Ngân hàng câu hỏi được chuẩn bị trong seed_questions.c.
 3. Chủ phòng tạo phòng với số câu và thời lượng. Server chỉ tạo nếu ngân hàng có đủ câu; câu hỏi được chọn ngẫu nhiên và cố định cho phòng. Trạng thái đầu tiên là `WAITING`.
-4. Người thi `JOIN` khi phòng còn `WAITING`. Client gửi `WAIT` và chờ. Khi chủ phòng gửi `START`, server đặt một `end_at` chung và trả **toàn bộ đề** cho các client đang chờ. Trạng thái chuyển thành `RUNNING`.
-5. Người thi gửi `ANSWER` cho từng câu, có thể đổi đáp án. Server lưu lựa chọn trong SQLite. `SUBMIT` chấm ngay và trả `SCORE`.
-6. Khi hết giờ, luồng nền của server tự chấm những người chưa nộp và **chủ động gửi `EVENT|AUTO_SCORE`** tới các kết nối của người đó. Client có luồng nhận riêng nên hiển thị điểm ngay cả khi người dùng đang ở lời nhắc nhập. Sau khi kết nối lại, `STATUS` trả điểm đã lưu. Khi tất cả đã nộp hoặc hết giờ, phòng chuyển thành `FINISHED`; lúc đó chủ phòng và người tham gia mới xem được `RESULTS`.
-7. Chế độ `PRACTICE` tạo một bài riêng với số câu và thời lượng do người dùng chọn. Server giữ đáp án đúng; `PSUBMIT` hoặc hết giờ trả tổng số câu đúng.
+4. Người thi `JOIN ROOM` khi phòng còn `WAITING`. Client gửi `AWAIT ROOM` và chờ. Khi chủ phòng gửi `START ROOM`, server đặt một `end_at` chung và trả **toàn bộ đề** cho các client đang chờ. Trạng thái chuyển thành `RUNNING`.
+5. Người thi gửi `ANSWER ROOM` cho từng câu, có thể đổi đáp án. Server lưu lựa chọn trong SQLite. `SUBMIT ROOM` chấm ngay và trả `127`.
+6. Khi hết giờ, luồng nền của server tự chấm những người chưa nộp và **chủ động gửi `210`** tới các kết nối của người đó. Client có luồng nhận riêng nên hiển thị điểm ngay cả khi người dùng đang ở lời nhắc nhập. Sau khi kết nối lại, `STATUS ROOM` trả điểm đã lưu. Khi tất cả đã nộp hoặc hết giờ, phòng chuyển thành `FINISHED`; lúc đó chủ phòng và người tham gia mới xem được `RESULTS ROOM`.
+7. Chế độ `CREATE PRACTICE` tạo một bài riêng với số câu và thời lượng do người dùng chọn. Server giữ đáp án đúng; `SUBMIT PRACTICE` hoặc hết giờ trả tổng số câu đúng.
 
 Mọi trạng thái quan trọng nằm trong SQLite, nên sau khi khởi động lại server vẫn xem được phòng và kết quả; bài đang chạy cũng được kết thúc đúng hạn khi server hoạt động lại.
 
-## Đối chiếu 13 tiêu chí Excel (20 điểm)
+## Giao thức và phạm vi chức năng
 
-| Tiêu chí | Cách thực hiện |
-|---|---|
-| Xử lý truyền dòng (1) | TCP dùng khung **4 byte độ dài theo network byte order + nội dung UTF-8**. `send_all`/`recv_all` xử lý chia/gộp gói tin trong `net.c`. |
-| Vào/ra socket trên server (2) | `socket` → `bind` → `listen` → `accept`; kiểm tra lỗi khởi động, một pthread cho mỗi kết nối trong `server.c`. |
-| Đăng ký và quản lý tài khoản (2) | `REGISTER`, `CHPASS`, `LOGOUT`; tài khoản lưu SQLite, mật khẩu lưu PBKDF2-HMAC-SHA256 với salt riêng trong `password.c`. |
-| Đăng nhập và quản lý phiên (2) | `LOGIN`, thông tin người dùng gắn với kết nối; ngắt kết nối hoặc `LOGOUT` xóa phiên. |
-| Kiểm soát quyền truy cập (1) | Admin mới được `ADDQ`; chủ phòng mới được `START`; thành viên mới được nhận đề/nộp; chủ phòng hoặc thành viên mới xem kết quả phòng đã kết thúc. |
-| Tham gia chế độ luyện tập (1) | `PRACTICE`, `PQUESTION`, `PANSWER`, `PSUBMIT`, `PSTATUS`; chọn số câu, thời gian, chấm tổng câu đúng khi nộp hoặc hết giờ. |
-| Tạo phòng thi (2) | `CREATE|tên|số_câu|thời_lượng`; kiểm tra đủ câu hỏi, tạo `WAITING`, chọn và cố định đề cho phòng. |
-| Xem danh sách phòng thi (1) | `LIST` trả tên, trạng thái `WAITING/RUNNING/FINISHED`, số câu, thời lượng, chủ phòng. |
-| Tham gia vào phòng thi (2) | `JOIN` chỉ thành công khi `WAITING`; kiểm tra đăng nhập và sức chứa. |
-| Bắt đầu bài thi (1) | Chủ phòng gửi `START`; server đặt hạn chung, trả toàn bộ đề qua yêu cầu `WAIT` đang chờ. |
-| Nộp bài (3) | `ANSWER` lưu/thay đáp án; `SUBMIT` chấm sớm; server tự chấm và gửi `EVENT|AUTO_SCORE` khi hết giờ; `STATUS` và `SUBMIT` trả điểm đã lưu mà không chấm lặp. |
-| Xem kết quả thi của các phòng thi (1) | `RESULTS` chỉ khi `FINISHED`; có điểm từng người và cờ nộp tự động. Dữ liệu tồn tại sau khi restart. |
-| Ghi log hoạt động (1) | Bảng `logs` ghi đăng ký, đăng nhập, tạo/vào/bắt đầu/kết thúc phòng, nộp bài, luyện tập, đổi mật khẩu và ngắt kết nối. |
+Giao thức mới là dòng văn bản UTF-8 kết thúc CRLF, tham số cách nhau bằng dấu cách; phản hồi bằng mã số. Xem [protocol.md](protocol.md) để biết danh mục đầy đủ. Ví dụ `CREATE ROOM PhongA 2 300`, `JOIN ROOM PhongA`, `START ROOM PhongA`, `ANSWER ROOM PhongA 1 B`. Luyện tập dùng cùng nhóm hành động: `CREATE PRACTICE`, `QUESTIONS PRACTICE`, `ANSWER PRACTICE`, `SUBMIT PRACTICE`. Không còn thêm câu hỏi hoặc đổi mật khẩu qua client/server.
 
-Xem [BENCHMARK_ANALYSIS.md](BENCHMARK_ANALYSIS.md) để biết vị trí xử lý từng tiêu chí trong mã nguồn và các tình huống đã kiểm thử.
+Ngân hàng gồm 20 câu tiếng Việt trong seed_questions.c. SQLite vẫn giữ cấu trúc dữ liệu cũ, nên không cần xóa question.db khi đổi giao thức. Phải biên dịch lại cả client và server. Các chuỗi có dấu | còn trong mã là biểu diễn nội bộ ở giữa codec và nghiệp vụ; trên socket không có dấu | hoặc tiền tố độ dài.
 
 ## Biên dịch
 
@@ -70,30 +58,16 @@ $env:EXAM_ADMIN_CODE='ma-bi-mat-cua-nhom'
 .\client.exe 127.0.0.1 9000
 ```
 
-Trong terminal 2, đăng ký và đăng nhập, rồi chọn **Create room**. Khi khởi tạo database rỗng, server nạp 20 câu hỏi mẫu **bằng tiếng Việt** về toán học, con vật, cây cối và đời sống; có thể tạo phòng hoặc luyện tập ngay. Client Windows đặt bảng mã console UTF-8 để hiển thị dấu tiếng Việt. Nếu muốn tự thêm câu hỏi, đăng ký admin bằng mã đã đặt rồi chọn **Add question**. Tài khoản student cũng có quyền tạo phòng, nhưng không có quyền thêm câu hỏi. Trong terminal 3, đăng ký và đăng nhập, chọn **Join room**. Client sẽ chờ. Quay về terminal 2, chọn **Start room**; terminal 3 nhận đề và bắt đầu làm. Sau khi nộp hoặc hết giờ, dùng **Results** để xem điểm.
+Trong terminal 2, đăng ký và đăng nhập, rồi chọn **Create room**. Khi khởi tạo database rỗng, server nạp 20 câu hỏi mẫu **bằng tiếng Việt** về toán học, con vật, cây cối và đời sống; có thể tạo phòng hoặc luyện tập ngay. Client Windows đặt bảng mã console UTF-8 để hiển thị dấu tiếng Việt. Tài khoản student và admin đều có quyền tạo phòng; chỉ chủ phòng được bắt đầu phòng. Trong terminal 3, đăng ký và đăng nhập, chọn **Join room**. Client sẽ chờ. Quay về terminal 2, chọn **Start room**; terminal 3 nhận đề và bắt đầu làm. Sau khi nộp hoặc hết giờ, dùng **Results** để xem điểm.
 
-Câu hỏi mẫu chỉ được nạp khi bảng `questions` đang rỗng; khởi động lại server không tạo thêm bản sao. File `question.db` dùng cho bộ 20 câu tiếng Việt mới và được tạo tự động nếu chưa có. Các database demo cũ không bị thay đổi; nếu truyền tên file database khác khi chạy server, chương trình sẽ dùng nội dung của file đó. Muốn dùng ngân hàng câu hỏi tự chuẩn bị, đặt `EXAM_SKIP_SEED=1` trước khi chạy server lần đầu, sau đó thêm câu qua tài khoản admin.
+Câu hỏi mẫu chỉ được nạp khi bảng `questions` đang rỗng; khởi động lại server không tạo thêm bản sao. File `question.db` dùng cho bộ 20 câu tiếng Việt mới và được tạo tự động nếu chưa có. Các database demo cũ không bị thay đổi; nếu truyền tên file database khác khi chạy server, chương trình sẽ dùng nội dung của file đó. Muốn dùng ngân hàng câu hỏi tự chuẩn bị, đặt `EXAM_SKIP_SEED=1` trước khi chạy server lần đầu, sau đó chuẩn bị dữ liệu SQLite ngoài ứng dụng.
 
 `EXAM_ADMIN_CODE` mặc định là `admin123` nếu không đặt biến môi trường; nên đặt mã khác khi demo. Server mặc định dùng cổng `9000` và `question.db`. Client mặc định kết nối `127.0.0.1:9000`.
 
-## Giao thức ứng dụng trên TCP
-
-Xem [protocol.md](protocol.md) để biết cấu trúc khung, từng lệnh/phản hồi, quyền truy cập và máy trạng thái. Server gửi đủ câu hỏi và bốn lựa chọn A–D; đáp án đúng chỉ được giữ ở server. Mỗi tài khoản chỉ có một phiên đăng nhập đang hoạt động.
-
-Mỗi thông điệp: `uint32` big-endian ghi số byte nội dung, tiếp theo là đúng số byte nội dung. Lệnh và tham số trong nội dung cách nhau bằng `|`. Trường người dùng không được có `|`, `\r`, `\n`. Phản hồi bắt đầu bằng `OK`, `ERR`, `ROOMS`, `EXAM`, `SCORE`, `RESULTS`, `PRACTICE`, `Q`, `PSCORE`, `PSTATUS` hoặc `FINISHED`. `EVENT|AUTO_SCORE` là thông báo tự động của server, có thể đến giữa hai phản hồi lệnh; client phân biệt nó bằng luồng nhận riêng. `WAIT` là long polling: sau tối đa 30 giây nếu chủ phòng chưa bắt đầu, server trả `WAITING` và client gửi lại.
-
-Các lệnh: `REGISTER`, `LOGIN`, `LOGOUT`, `CHPASS`, `ADDQ`, `CREATE`, `LIST`, `JOIN`, `START`, `WAIT`, `EXAM`, `ANSWER`, `SUBMIT`, `STATUS`, `RESULTS`, `PRACTICE`, `PQUESTION`, `PANSWER`, `PSUBMIT`, `PSTATUS`. Client chỉ hiển thị câu hỏi và các lựa chọn; đáp án đúng ở server.
-
 ## Kiểm thử
 
-Sau khi biên dịch, chạy bài kiểm thử tích hợp:
+Sau khi biên dịch, chạy `python tests/test_integration.py`. Kiểm thử dùng database tạm và giao thức CRLF trực tiếp, không tác động question.db đang dùng.
 
-```powershell
-python tests/test_integration.py
-```
+## Giới hạn
 
-Bài kiểm thử dùng database tạm, khởi động **server thật** và gửi thông điệp TCP như client. Nó kiểm tra câu hỏi mẫu khi khởi tạo database, khung bị chia nhỏ và nhiều khung trong một lần gửi, đăng ký/đăng nhập, phân quyền, tạo/vào/bắt đầu phòng, phát đề, đổi đáp án, nộp sớm, thông báo tự động khi hết giờ (cả trên client thật), luyện tập, đổi mật khẩu và dữ liệu sau restart. Phần kiểm thử luồng thi riêng dùng `EXAM_SKIP_SEED=1` để có ngân hàng câu hỏi xác định.
-
-## Giới hạn triển khai
-
-Đây là ứng dụng phục vụ bài tập môn học. TCP hiện chưa mã hóa bằng TLS; chỉ nên chạy trong mạng lab hoặc mạng tin cậy. Thời gian thi tối thiểu 10 giây, tối đa 24 giờ; mỗi phòng tối đa 50 câu và 32 người. Người thi làm bài trên client dòng lệnh; đồng hồ server quyết định hạn nộp, không phụ thuộc đồng hồ client.
+Chưa có TLS, chống thử mật khẩu liên tục hoặc phiên bản giao thức. EXAM_ADMIN_CODE vẫn cần được đặt riêng khi demo. Mỗi phòng tối đa 32 người, đề tối đa 50 câu nhưng phải đủ câu trong ngân hàng. Server dùng một khóa SQLite chung, WAIT nội bộ thăm dò mỗi 100 ms; trên giao thức lệnh này mang tên AWAIT ROOM. Đây là ứng dụng phục vụ môn học trong mạng tin cậy.

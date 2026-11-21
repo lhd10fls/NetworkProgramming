@@ -1,255 +1,118 @@
-# Đặc tả giao thức ứng dụng Online Test System
+# Giao thức văn bản Online Test System
 
-Tài liệu này mô tả **giao thức ứng dụng do project thiết kế**, chạy trên **TCP/IPv4**. TCP chuyển luồng byte giữa hai máy; các quy tắc dưới đây xác định ranh giới thông điệp, cú pháp lệnh, ý nghĩa dữ liệu và trình tự trao đổi giữa client với server. Giao thức này không phải HTTP hay một giao thức Internet có tên đăng ký riêng.
+## 1. Phạm vi
 
-## 1. Thành phần và phạm vi
+Client và server dùng TCP/IPv4, mặc định cổng 9000. TCP vẫn vận chuyển luồng byte; tầng ứng dụng trao đổi chuỗi UTF-8 có kết thúc dòng, không dùng tiền tố độ dài nhị phân. Server dùng SQLite question.db; mỗi tài khoản chỉ có một phiên trên một server.
 
-| Thành phần | Vai trò |
+## 2. Ranh giới và cú pháp
+
+Mỗi yêu cầu hoặc phản hồi là một dòng kết thúc bằng hai byte CR LF (`\r\n`). Không gửi chữ `\r\n` nguyên văn. Giới hạn dòng nội dung trên mạng là 65.536 byte, chưa tính CRLF. Bên nhận đọc đến CRLF; dòng thiếu kết thúc vẫn phải chờ, mất kết nối thì kết thúc. Dòng vượt giới hạn, NUL, LF đơn hoặc CR không đi với LF làm đóng kết nối.
+
+Các trường phân tách bằng một dấu cách. Có thể đặt tham số trong dấu ngoặc kép; server luôn đặt dữ liệu phản hồi trong ngoặc kép. Dùng `\"` cho dấu ngoặc kép, `\\` cho dấu gạch chéo ngược. Trường rỗng viết `""`. Tên lệnh và phạm vi viết HOA. Số được truyền dưới dạng chữ số thập phân, có thể đặt trong ngoặc kép. end_at là Unix timestamp theo giây do server quyết định.
+
+Ví dụ yêu cầu thực tế: `JOIN ROOM PhongA\r\n`; phản hồi `122\r\n`. LIST ROOMS trả danh sách phòng, không phải danh sách người dùng. room_name luôn là tên phòng thi; practice_id luôn là mã bài luyện tập cá nhân.
+
+Phản hồi danh sách hoặc đề dùng từ khóa ROW để bắt đầu mỗi bản ghi, vẫn nằm trong cùng một dòng CRLF. ROW là từ khóa cấu trúc không có ngoặc kép; văn bản "ROW" có ngoặc kép vẫn là dữ liệu. Trong nội bộ C, net.c chuyển qua lại giữa chuỗi trường phân cách bằng | và dòng giao thức. Ký tự | chỉ là biểu diễn nội bộ, không truyền trên socket. Dữ liệu nhập không chứa |, CR, LF hoặc ký tự điều khiển. Giới hạn trường được tính theo byte UTF-8, không theo số ký tự.
+
+## 3. Mã phản hồi và lỗi chung
+
+| Mã | Ý nghĩa / dữ liệu theo sau |
 |---|---|
-| Server | Lắng nghe cổng TCP (mặc định 9000), xác thực, lưu SQLite, quyết định thời gian và chấm điểm. |
-| Client | Kết nối đến IP/cổng server, gửi lệnh và hiển thị phản hồi hoặc sự kiện. |
-| Kết nối | Một kết nối gắn với tối đa một phiên đăng nhập; mỗi tài khoản chỉ có một phiên đang hoạt động trên server. LOGOUT hoặc đóng socket giải phóng phiên. |
-| Dữ liệu bền vững | Tài khoản, câu hỏi, phòng, đáp án và kết quả lưu trong SQLite; phiên TCP không được khôi phục sau khi ngắt kết nối. |
+| 110 | Đăng ký thành công |
+| 111 | Đăng nhập thành công, role |
+| 112 | Đăng xuất thành công |
+| 120 | Tạo phòng thành công, trạng thái ban đầu WAITING |
+| 121 | Danh sách phòng: các ROW R room_name state count duration owner |
+| 122 | Tham gia phòng thành công |
+| 123 | Bắt đầu phòng thành công |
+| 124 | Phòng vẫn WAITING sau lượt chờ |
+| 125 | Đề phòng: room_name end_at count, các ROW Q pos text A B C D selected |
+| 126 | Lưu lựa chọn thành công, dùng chung hai chế độ |
+| 127 | Điểm cá nhân của phòng: correct total |
+| 128 | Trạng thái phòng: state end_at |
+| 129 | Bảng điểm: các ROW R username correct total automatic |
+| 130 | Phòng đã kết thúc: correct total |
+| 131 | Tạo bài cá nhân: practice_id end_at count |
+| 132 | Câu luyện tập: pos text A B C D |
+| 133 | Điểm luyện tập: correct total |
+| 134 | Trạng thái bài cá nhân: RUNNING end_at |
+| 210 | Sự kiện hết giờ phòng: room_name correct total |
+| 400 | Sai yêu cầu/lệnh, theo sau là lý do |
+| 401 | Chưa xác thực hoặc sai thông tin đăng nhập |
+| 403 | Không có quyền |
+| 404 | Không tìm thấy dữ liệu |
+| 409 | Xung đột hoặc sai trạng thái nghiệp vụ |
+| 500 | Lỗi xử lý phía server |
 
+Mã lỗi dùng chung cho mọi nhóm lệnh. Ví dụ `400 BAD_REQUEST`, `400 UNKNOWN_COMMAND`, `401 LOGIN_REQUIRED`, `401 CREDENTIALS`, `403 ADMIN_CODE`, `403 FORBIDDEN`, `403 NOT_PARTICIPANT`, `404 ROOM_NOT_FOUND`, `404 PRACTICE_NOT_FOUND`, `409 USER_EXISTS`, `409 ROOM_EXISTS`, `409 ALREADY_LOGGED_IN`, `409 ROOM_NOT_WAITING`, `409 ROOM_FULL`, `409 NO_PARTICIPANTS`, `409 EXAM_CLOSED`, `409 PRACTICE_CLOSED`, `409 ROOM_NOT_FINISHED`, `409 NOT_ENOUGH_QUESTIONS`, `409 NOT_RUNNING`, `409 RESULT_NOT_READY`, `500 DB`, `500 PASSWORD_HASH`. Client dùng mã số để phân nhóm và reason để giải thích. Các lỗi truyền tải có thể đóng kết nối mà không trả mã.
 
-## 2. Khung thông điệp trên TCP
+## 4. Hành động, trạng thái và quyền
 
-TCP là **luồng byte**, không giữ ranh giới hai lần gửi. Mỗi thông điệp ứng dụng có khung:
+AWAIT là hành động chờ phản hồi, WAITING là trạng thái phòng. Không dùng WAIT làm tên lệnh trên mạng. Trạng thái phòng là WAITING, RUNNING, FINISHED. REGISTER không tự đăng nhập. LOGIN thành công gắn user_id/role vào socket; LOGOUT hoặc ngắt kết nối giải phóng phiên.
 
-~~~text
-Offset    Kích thước    Ý nghĩa
-0         4 byte        L: độ dài nội dung, uint32 big-endian
-4         L byte        Nội dung thông điệp
-~~~
+Bất kỳ tài khoản đã đăng nhập đều được CREATE ROOM. Chỉ người tạo phòng được START ROOM; admin không được bắt đầu phòng người khác. Chỉ thành viên được AWAIT/QUESTIONS/ANSWER/SUBMIT/STATUS ROOM. RESULTS ROOM chỉ cho chủ phòng hoặc thành viên, sau FINISHED. Lệnh PRACTICE theo phạm vi chỉ truy cập bài của chính tài khoản đó. Không còn chức năng thêm câu hỏi và đổi mật khẩu qua giao thức/menu. Ngân hàng mẫu được quản lý trong seed_questions.c.
 
-- **L tính bằng byte**, không phải số ký tự; nội dung tối đa **65.536 byte**.
-- Phía gửi dùng **htonl**, phía nhận dùng **ntohl** để chuyển network byte order.
-- **send_all/recv_all** lặp cho đến khi chuyển đủ 4 byte đầu và đủ L byte nội dung; không giả định một lệnh send/recv chuyển hết thông điệp.
-- Nội dung là văn bản theo quy ước UTF-8. Code hiện xử lý chuỗi byte C và **chưa xác minh UTF-8 hợp lệ**. Không gửi byte NUL trong nội dung.
-- Ví dụ LIST có L = 4: **00 00 00 04 4C 49 53 54** (hex).
-- Nếu khung vượt giới hạn, nhận thiếu dữ liệu hoặc kết nối đóng, recv_frame trả thất bại và luồng xử lý kết thúc; không bảo đảm có phản hồi ERR.
+AWAIT giữ yêu cầu khoảng tối đa 30 giây. Server kiểm tra trạng thái mỗi 100 ms; chưa bắt đầu thì trả 124 và client gửi AWAIT lại. Khi RUNNING, trả 125. Khi FINISHED, trả 130 hoặc lỗi nếu chưa có kết quả. Gửi một yêu cầu và đợi phản hồi chính trước yêu cầu kế tiếp, không có request ID. Sự kiện 210 có thể xen giữa; receiver_thread nhận diện riêng.
 
+## 5. Danh mục hành động
 
-## 3. Cú pháp nội dung và quy tắc trao đổi
+### 5.1. Tài khoản
 
-~~~text
-Yêu cầu: COMMAND[|field1[|field2...]]
-Phản hồi lỗi: ERR|CODE
-Phản hồi thành công: một trong các định dạng ở mục 5 và 6
-~~~
-
-- Tên lệnh và mã trạng thái dùng chữ in hoa ASCII. Vai trò là **student/admin**; đáp án là **A/B/C/D**.
-- **|** phân tách trường. Trường văn bản do người dùng nhập không được chứa **|**, CR, LF hoặc ký tự điều khiển; giao thức hiện không có cơ chế escape.
-- Một số phản hồi chứa nhiều dòng bên trong **cùng một khung**. LF phân tách dòng bản ghi, không phân tách khung TCP.
-- Số nguyên truyền bằng chữ số thập phân ASCII. **end_at** là Unix timestamp theo giây, do server đặt và đối chiếu với đồng hồ server.
-- Khi trường cuối rỗng, vẫn giữ dấu phân cách. Ví dụ tài khoản student đăng ký bằng **REGISTER|alice|pw|student|**.
-- Server xử lý các khung **tuần tự trên mỗi kết nối**. Giao thức hiện **không có request ID**; client gửi một yêu cầu, chờ phản hồi rồi mới gửi yêu cầu tiếp theo.
-- Một yêu cầu có một phản hồi chính. **EVENT|AUTO_SCORE** là sự kiện bất đồng bộ, có thể đến giữa yêu cầu và phản hồi; client phải tách sự kiện này ra khi nhận.
-- Lệnh **WAIT** có thể giữ yêu cầu tối đa khoảng 30 giây khi phòng chưa bắt đầu; sau đó server trả WAITING và client gửi WAIT lại.
-
-
-## 4. Phiên và quyền truy cập
-
-Trước khi đăng nhập, chỉ **REGISTER** và **LOGIN** được xử lý; lệnh nghiệp vụ khác trả **ERR|LOGIN_REQUIRED**. LOGIN thành công lưu user_id và role trong cấu trúc Client của server, không gửi token phiên. Nếu tài khoản đang đăng nhập trên một kết nối khác, LOGIN trả **ERR|ALREADY_LOGGED_IN** và kết nối mới vẫn chưa xác thực. Sau LOGOUT hoặc đóng kết nối cũ, tài khoản có thể đăng nhập lại.
-
-| Hành động | Người được phép |
+| Yêu cầu | Phản hồi thành công |
 |---|---|
-| ADDQ | Chỉ admin. |
-| CREATE | Bất kỳ tài khoản đã đăng nhập; người tạo là chủ phòng. |
-| START | Chỉ chủ phòng; admin không có quyền thay chủ phòng. |
-| WAIT, EXAM, ANSWER, SUBMIT, STATUS | Chỉ người đã JOIN phòng. |
-| RESULTS | Chủ phòng hoặc người đã JOIN, sau khi phòng FINISHED. |
-| PQUESTION, PANSWER, PSUBMIT, PSTATUS | Chỉ chủ sở hữu bài luyện tập. |
+| REGISTER username password student "" | 110 |
+| REGISTER username password admin admin_code | 110 |
+| LOGIN username password | 111 "student" hoặc 111 "admin" |
+| LOGOUT | 112 |
 
+Username tối đa 32 byte; password đăng ký tối đa 128 byte; tên không trùng trong cùng database. Admin cần EXAM_ADMIN_CODE. Hiện chưa có TLS; mật khẩu chỉ được băm khi lưu.
 
-## 5. Danh mục lệnh và phản hồi
+### 5.2. Phòng thi và bài luyện tập dùng chung ngân hàng
 
-Ký hiệu: **name** = tên phòng, **count** = số câu, **duration** = thời lượng giây, **pos** = số thứ tự câu bắt đầu từ 1, **choice** = A/B/C/D, **id** = mã bài luyện tập. 
+Không còn nhóm lệnh PQUESTION/PANSWER/PSUBMIT/PSTATUS trên mạng; cũng không có lệnh PRACTICE độc lập. Cùng một hành động dùng phạm vi ROOM hoặc PRACTICE để chỉ rõ đối tượng. Hai chế độ cùng lấy từ bảng questions nhưng có lịch thi và quyền riêng.
 
-### 5.1. Tài khoản và câu hỏi
-
-| Yêu cầu | Điều kiện/ý nghĩa | Phản hồi thành công |
-|---|---|---|
-| REGISTER\|username\|password\|role\|admin_code | Chưa đăng nhập; username tối đa 32, password tối đa 128 ký tự; role student/admin. Admin cần mã EXAM_ADMIN_CODE. Student để trống trường cuối. | OK\|REGISTERED |
-| LOGIN\|username\|password | Chưa đăng nhập; xác minh mật khẩu và gắn phiên vào kết nối. Từ chối nếu tài khoản có phiên đang hoạt động. | OK\|LOGIN\|student hoặc OK\|LOGIN\|admin |
-| LOGOUT | Đã đăng nhập; xóa phiên trên kết nối. | OK\|LOGOUT |
-| CHPASS\|old_password\|new_password | Đã đăng nhập; mật khẩu cũ đúng, mật khẩu mới không rỗng và tối đa 128 ký tự. | OK\|PASSWORD_CHANGED |
-| ADDQ\|text\|A\|B\|C\|D\|correct\|topic\|difficulty | Chỉ admin; text tối đa 200 ký tự, trường còn lại tối đa 100; correct là A/B/C/D. | OK\|QUESTION\|question_id |
-
-### 5.2. Phòng thi
-
-| Yêu cầu | Điều kiện/ý nghĩa | Phản hồi thành công |
-|---|---|---|
-| CREATE\|name\|count\|duration | Đã đăng nhập; name tối đa 48 ký tự, count 1–50, duration 10–86.400 giây, ngân hàng đủ câu. Server chọn và cố định bộ câu. | OK\|ROOM\|WAITING |
-| LIST | Đã đăng nhập; lấy tối đa 100 phòng mới nhất. | ROOMS và các dòng R\|name\|state\|count\|duration\|owner |
-| JOIN\|name | Phòng WAITING, chưa đủ 32 người; JOIN lại khi đã là thành viên vẫn được OK. | OK\|JOINED |
-| START\|name | Đúng chủ phòng, phòng WAITING và có ít nhất một thành viên. Server đặt start_at/end_at chung. | OK\|STARTED |
-| WAIT\|name | Chỉ thành viên; chờ tối đa khoảng 30 giây mỗi lần gọi. | WAITING, EXAM... hoặc FINISHED... |
-| EXAM\|name | Chỉ thành viên; hỏi trạng thái/nhận lại đề ngay. | WAITING, EXAM... hoặc FINISHED... |
-| ANSWER\|name\|pos\|choice | Thành viên, phòng RUNNING, còn thời gian, chưa nộp. Gửi lại cùng pos để đổi đáp án. | OK\|ANSWER_SAVED |
-| SUBMIT\|name | Thành viên; nộp sớm khi còn giờ hoặc lấy điểm đã lưu nếu đã nộp. | SCORE\|correct\|total |
-| STATUS\|name | Thành viên; xem trạng thái hoặc lấy lại điểm sau khi kết nối lại. | STATUS\|state\|end_at hoặc SCORE\|correct\|total |
-| RESULTS\|name | Chủ phòng hoặc thành viên; phòng FINISHED. | RESULTS và các dòng R\|username\|correct\|total\|automatic |
-
-### 5.3. Luyện tập
-
-| Yêu cầu | Điều kiện/ý nghĩa | Phản hồi thành công |
-|---|---|---|
-| PRACTICE\|count\|duration | Đã đăng nhập; count 1–50, duration 10–86.400 giây, ngân hàng đủ câu. Bắt đầu tính giờ ngay. | PRACTICE\|id\|end_at\|count |
-| PQUESTION\|id\|pos | Đúng chủ bài, bài còn thời gian, pos nằm trong bài. | Q\|pos\|text\|A\|B\|C\|D |
-| PANSWER\|id\|pos\|choice | Đúng chủ bài, bài còn thời gian; gửi lại cùng pos để đổi đáp án. | OK\|ANSWER_SAVED |
-| PSUBMIT\|id | Đúng chủ bài; nộp sớm hoặc lấy điểm đã lưu. | PSCORE\|correct\|total |
-| PSTATUS\|id | Đúng chủ bài; xem bài còn chạy hay đã có điểm. | PSTATUS\|RUNNING\|end_at hoặc PSCORE\|correct\|total |
-
-## 6. Phản hồi nhiều dòng và sự kiện
-
-Các ví dụ trong mục này là **phần nội dung của khung**; trên TCP vẫn phải thêm 4 byte độ dài phía trước.
-
-### 6.1. Danh sách phòng
-
-~~~text
-ROOMS
-R|PhongA|WAITING|10|600|teacher
-R|PhongB|FINISHED|5|120|alice
-~~~
-
-Mỗi dòng R gồm tên phòng, trạng thái, số câu, thời lượng giây và chủ phòng. Nếu chưa có phòng, nội dung chỉ là **ROOMS**.
-
-### 6.2. Đề thi và bốn lựa chọn
-
-~~~text
-EXAM|PhongA|1794357565|2
-Q|1|Which protocol is reliable?|UDP|TCP|IP|ARP|
-Q|2|Which call accepts a client?|bind|accept|send|close|B
-~~~
-
-Mỗi dòng Q gồm **vị trí, nội dung câu hỏi, văn bản lựa chọn A, B, C, D và lựa chọn mà người thi đã lưu**. Trường cuối rỗng nếu chưa trả lời. **Server có gửi đầy đủ bốn lựa chọn A–D; server không gửi ký tự đáp án đúng**. Trường cuối B của câu thứ hai trong ví dụ chỉ là câu trả lời trước đó của chính người thi, không chứng minh B đúng. Khi vào bài thi, client hiện in ngay toàn bộ câu hỏi cùng bốn lựa chọn; chọn số câu sẽ hiện lại câu đó để trả lời.
-
-end_at là Unix timestamp theo giây do server đặt; con số trong ví dụ chỉ minh họa định dạng. Phản hồi EXAM là **một khung**, các dòng Q được ngăn bằng LF trong nội dung.
-
-### 6.3. Bảng điểm phòng
-
-~~~text
-RESULTS
-R|alice|2|2|0
-R|bob|1|2|1
-~~~
-
-Trường cuối **automatic** bằng 0 khi người thi nộp sớm, bằng 1 khi server tự nộp lúc hết giờ. Các dòng sắp theo điểm giảm dần rồi theo tên.
-
-### 6.4. Thông báo tự động
-
-~~~text
-EVENT|AUTO_SCORE|PhongA|1|2
-~~~
-
-Sự kiện này được gửi tới kết nối còn hoạt động của người chưa nộp khi phòng hết giờ. Nó **không phải phản hồi của yêu cầu ngay trước đó**. Client cần nhận diện tiền tố EVENT|AUTO_SCORE|, hiển thị điểm và tiếp tục đợi phản hồi chính. Người đã mất kết nối có thể LOGIN lại rồi gửi STATUS để lấy điểm đã lưu. Luyện tập không có sự kiện tự động riêng; dùng PSTATUS hoặc PSUBMIT để lấy điểm.
-
-
-## 7. Trạng thái và trình tự thông điệp
-
-### 7.1. Trạng thái phiên
-
-~~~text
-CONNECTED_UNAUTH --REGISTER thành công--> CONNECTED_UNAUTH
-CONNECTED_UNAUTH --LOGIN thành công--> AUTHENTICATED
-CONNECTED_UNAUTH --LOGIN tài khoản đang hoạt động--> CONNECTED_UNAUTH
-AUTHENTICATED --LOGOUT--> CONNECTED_UNAUTH
-CONNECTED_UNAUTH/AUTHENTICATED --đóng socket--> DISCONNECTED
-~~~
-
-REGISTER tạo tài khoản nhưng không tự đăng nhập. LOGIN sai mật khẩu hoặc gặp phiên đang hoạt động không đổi trạng thái. Mỗi tài khoản chỉ được có một kết nối đang xác thực tại một thời điểm.
-
-Ví dụ hai terminal cùng dùng tài khoản alice:
-
-~~~text
-Terminal 1 -> LOGIN|alice|pw       <- OK|LOGIN|student
-Terminal 2 -> LOGIN|alice|pw       <- ERR|ALREADY_LOGGED_IN
-Terminal 1 -> LOGOUT               <- OK|LOGOUT
-Terminal 2 -> LOGIN|alice|pw       <- OK|LOGIN|student
-~~~
-
-### 7.2. Trạng thái phòng thi
-
-~~~mermaid
-stateDiagram-v2
-    [*] --> WAITING: CREATE
-    WAITING --> WAITING: JOIN
-    WAITING --> RUNNING: START bởi chủ phòng
-    RUNNING --> RUNNING: ANSWER / một số người SUBMIT
-    RUNNING --> FINISHED: Mọi người đã nộp
-    RUNNING --> FINISHED: Hết end_at
-~~~
-
-- **WAITING:** người dùng có thể JOIN; thành viên gọi WAIT/EXAM nhận WAITING.
-- **RUNNING:** thành viên nhận EXAM, gửi ANSWER hoặc SUBMIT trước end_at. Có thể đổi đáp án bằng cách gửi ANSWER lại cùng vị trí.
-- **FINISHED:** không nhận JOIN/ANSWER; chủ phòng và thành viên được xem RESULTS. Không có lệnh mở lại hoặc kết thúc thủ công trước giờ.
-- Người tạo phòng **không tự động là thí sinh**; muốn làm bài thì JOIN khi phòng còn WAITING.
-
-### 7.3. Trình tự một lượt thi
-
-~~~mermaid
-sequenceDiagram
-    participant O as Chủ phòng
-    participant S as Server
-    participant P as Người thi
-    O->>S: CREATE|PhongA|2|60
-    S-->>O: OK|ROOM|WAITING
-    P->>S: JOIN|PhongA
-    S-->>P: OK|JOINED
-    P->>S: WAIT|PhongA
-    O->>S: START|PhongA
-    S-->>O: OK|STARTED
-    S-->>P: EXAM|PhongA|end_at|2 + 2 dòng Q
-    P->>S: ANSWER|PhongA|1|B
-    S-->>P: OK|ANSWER_SAVED
-    P->>S: SUBMIT|PhongA
-    S-->>P: SCORE|1|2
-    O->>S: RESULTS|PhongA
-    S-->>O: RESULTS + các dòng R sau khi FINISHED
-~~~
-
-Nếu người thi không SUBMIT trước hạn, server tự chấm và phát EVENT|AUTO_SCORE khi kết nối còn mở. Nếu WAIT đủ khoảng 30 giây mà phòng vẫn WAITING, server trả WAITING và client gửi WAIT lại. Khi người thi kết nối lại, EXAM cung cấp lại đề và lựa chọn đã lưu; STATUS trả điểm nếu đã chấm.
-
-### 7.4. Trình tự luyện tập
-
-~~~text
-PRACTICE -> PQUESTION -> PANSWER (có thể lặp/sửa) -> PSUBMIT -> PSCORE
-                                              -> hết giờ -> điểm được lưu -> PSTATUS -> PSCORE
-~~~
-
-Luyện tập bắt đầu tính giờ ngay khi PRACTICE thành công; không cần phòng hoặc START.
-
-## 8. Mã lỗi
-
-Mọi lỗi ứng dụng có dạng **ERR|CODE**. Không phải lệnh nào cũng có thể trả tất cả các mã dưới đây.
-
-| Mã | Ý nghĩa |
+| Yêu cầu | Ý nghĩa và phản hồi |
 |---|---|
-| BAD_REQUEST | Sai số trường, giá trị/định dạng không hợp lệ hoặc cố REGISTER/LOGIN trên kết nối đã xác thực. |
-| TOO_MANY_FIELDS | Thông điệp có hơn 16 trường sau khi tách. |
-| UNKNOWN_COMMAND | Lệnh không hỗ trợ sau khi đã đăng nhập. |
-| LOGIN_REQUIRED | Gửi lệnh nghiệp vụ khi chưa đăng nhập. |
-| CREDENTIALS | Sai tên tài khoản hoặc mật khẩu. |
-| ALREADY_LOGGED_IN | Tài khoản đã đăng nhập trên một kết nối khác. |
-| ADMIN_CODE | Mã đăng ký admin sai. |
-| USER_EXISTS | Username đã tồn tại. |
-| OLD_PASSWORD | Mật khẩu cũ sai hoặc không đổi được mật khẩu. |
-| PASSWORD_HASH | Không tạo được giá trị băm mật khẩu. |
-| FORBIDDEN | Không có quyền thực hiện thao tác. |
-| NOT_ENOUGH_QUESTIONS | Ngân hàng không đủ câu cho phòng/bài luyện tập. |
-| ROOM_EXISTS | Tên phòng đã tồn tại. |
-| ROOM_NOT_FOUND | Không tìm thấy phòng. |
-| ROOM_NOT_WAITING | Phòng không còn ở trạng thái WAITING. |
-| ROOM_FULL | Phòng đã đủ 32 người. |
-| NO_PARTICIPANTS | Chủ phòng START khi chưa có người JOIN. |
-| NOT_PARTICIPANT | Người dùng không thuộc phòng. |
-| NOT_RUNNING | Không lấy được đề vì phòng không ở trạng thái RUNNING. |
-| EXAM_CLOSED | Bài thi chưa hoặc không còn mở để trả lời/nộp. |
-| RESULT_NOT_READY | Phòng đã kết thúc nhưng người hỏi chưa có điểm. |
-| ROOM_NOT_FINISHED | Chưa được xem bảng điểm vì phòng chưa FINISHED. |
-| PRACTICE_NOT_FOUND | Không có bài luyện tập thuộc người dùng với mã đã gửi. |
-| PRACTICE_CLOSED | Bài luyện tập không còn mở để lấy câu/trả lời/nộp. |
-| DB | Lỗi thao tác SQLite. |
+| CREATE ROOM room_name count duration | Chọn cố định đề, tạo phòng WAITING; 120 |
+| CREATE PRACTICE count duration | Tạo bài cá nhân và bắt đầu tính giờ ngay; 131 practice_id end_at count |
+| LIST ROOMS | Danh sách tối đa 100 phòng mới nhất; 121 và các ROW |
+| JOIN ROOM room_name | Vào phòng WAITING, tối đa 32 người; 122 |
+| START ROOM room_name | Chủ phòng, có ít nhất một thành viên; 123 |
+| AWAIT ROOM room_name | Chờ phòng bắt đầu; 124 / 125 / 130 |
+| QUESTIONS ROOM room_name | Lấy lại toàn bộ đề khi RUNNING; 125; phòng chờ trả 124, kết thúc trả 130 |
+| QUESTIONS PRACTICE practice_id pos | Lấy một câu thuộc bài cá nhân còn giờ; 132 |
+| ANSWER ROOM room_name pos choice | Lưu/thay đáp án nếu còn giờ và chưa nộp; 126 |
+| ANSWER PRACTICE practice_id pos choice | Lưu/thay đáp án của bài cá nhân còn giờ; 126 |
+| SUBMIT ROOM room_name | Nộp sớm hoặc lấy lại điểm đã lưu; 127 |
+| SUBMIT PRACTICE practice_id | Nộp sớm hoặc lấy lại điểm; 133 |
+| STATUS ROOM room_name | 128 state end_at hoặc 127 correct total |
+| STATUS PRACTICE practice_id | 134 RUNNING end_at hoặc 133 correct total |
+| RESULTS ROOM room_name | Bảng điểm khi FINISHED; 129 và các ROW |
 
-Lỗi khung TCP hoặc mất kết nối có thể làm recv_frame thất bại và đóng luồng xử lý mà không gửi ERR.
+room_name: tên phòng thi, không phải username hay topic; tối đa 48 byte. count: 1–50 và không vượt ngân hàng. duration: 10–86400 giây. pos: bắt đầu từ 1 và nằm trong đề. choice: A/B/C/D. Ngân hàng mặc định có 20 câu; không thể tạo đề 50 câu nếu chưa đủ dữ liệu. Giao thức cho đổi lựa chọn luyện tập nhưng UI hiện đi lần lượt, chưa có nút quay lại câu trước.
+
+## 6. Ví dụ dòng phản hồi
+
+Các ví dụ dưới đây đều phải thêm CRLF ở cuối khi gửi. Không có dấu | trên mạng.
+
+```text
+111 "student"
+121 ROW "R" "PhongA" "WAITING" "2" "60" "teacher"
+125 "PhongA" "1795000000" "2" ROW "Q" "1" "2 + 3 bằng bao nhiêu?" "4" "5" "6" "7" "" ROW "Q" "2" "Một tuần có mấy ngày?" "5" "7" "6" "8" "B"
+127 "1" "2"
+129 ROW "R" "alice" "1" "2" "0"
+210 "PhongA" "1" "2"
+409 ROOM_NOT_WAITING
+```
+
+Trường cuối của ROW Q là lựa chọn người thi đã lưu, không phải đáp án đúng. automatic bằng 0 khi nộp sớm, 1 khi tự chấm hết giờ. 210 chỉ áp dụng thi theo phòng; bài cá nhân tự lưu điểm và client hỏi STATUS/SUBMIT để nhận 133.
+
+## 7. Trình tự và thời gian
+
+Thi theo phòng: LOGIN → CREATE ROOM → JOIN ROOM → AWAIT ROOM → START ROOM → 125 đề → ANSWER ROOM → SUBMIT ROOM → 127 điểm → RESULTS ROOM → 129 bảng điểm. AWAIT được gửi bởi người thi; START được gửi bởi chủ phòng trên kết nối khác. 125 là phản hồi của AWAIT đang chờ. Thời gian bắt đầu khi server xử lý START, trước khi client nhận đề. Khi mọi người nộp sớm, hoặc khi end_at đến hạn, phòng chuyển FINISHED. Hết giờ server tự chấm người chưa nộp, lưu SQLite và gửi 210 nếu còn kết nối. Người mất kết nối có thể LOGIN rồi STATUS để lấy điểm.
+
+Luyện tập: LOGIN → CREATE PRACTICE → 131 ID/hạn giờ → QUESTIONS PRACTICE → 132 câu → ANSWER PRACTICE → 126 → lặp câu tiếp → SUBMIT PRACTICE → 133 điểm. Thời gian bắt đầu ngay khi tạo bài, không có JOIN, AWAIT hoặc START. Câu và thời gian tải qua mạng nằm trong thời lượng bài. Đồng hồ server quyết định hạn nộp; đồng hồ client chỉ phục vụ giao diện.
+
+## 8. Triển khai và kiểm chứng
+
+net.c/net.h thực hiện codec văn bản, quoting, ROW và CRLF. Chuỗi phân trường nội bộ chỉ để tái sử dụng phần nghiệp vụ; request/response trên socket tuân theo tài liệu này. server.c giữ máy trạng thái, quyền và SQLite; client.c giữ menu và luồng nhận sự kiện. Bộ kiểm thử tests/test_integration.py gửi trực tiếp giao thức mới, kiểm tra dữ liệu chia nhỏ, nhiều dòng gộp một lần gửi, quyền, tạo/thi/nộp, luyện tập, sự kiện hết giờ, UTF-8 và client thật. Giao thức mới không tương thích client/server phiên bản cũ; cần biên dịch cả hai phía.
