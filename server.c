@@ -19,14 +19,12 @@
 
 static sqlite3 *db;
 static pthread_mutex_t db_mutex = PTHREAD_MUTEX_INITIALIZER;
-static const char *admin_code;
 static volatile int running = 1;
 
 typedef struct {
     socket_t sock;
     int user_id;
     char username[64];
-    char role[16];
     pthread_mutex_t send_mutex;
 } Client;
 static Client *active_clients[256];
@@ -261,36 +259,34 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
     sqlite3_stmt *s;
     const char *cmd = v[0];
     strcpy(out, "ERR|BAD_REQUEST");
+    if (!strcmp(cmd, "MALFORMED")) return;
     if (!strcmp(cmd, "REGISTER")) {
-        if (n != 5 || c->user_id || !valid_field(v[1], 32) || !valid_field(v[2], 128) ||
-            (strcmp(v[3], "admin") && strcmp(v[3], "student"))) return;
-        if (!strcmp(v[3], "admin") && strcmp(v[4], admin_code)) { strcpy(out, "ERR|ADMIN_CODE"); return; }
+        if (n != 3 || c->user_id || !valid_field(v[1], 32) || !valid_field(v[2], 128)) return;
         char password_value[128];
         if (!password_hash(v[2], password_value)) { strcpy(out, "ERR|PASSWORD_HASH"); return; }
         if (!prep(&s, "INSERT INTO users(username,password,role) VALUES(?,?,?)")) { strcpy(out, "ERR|DB"); return; }
         sqlite3_bind_text(s, 1, v[1], -1, SQLITE_TRANSIENT);
         sqlite3_bind_text(s, 2, password_value, -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(s, 3, v[3], -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(s, 3, "student", -1, SQLITE_STATIC);
         int ok = sqlite3_step(s) == SQLITE_DONE;
         sqlite3_finalize(s);
         if (!ok) { strcpy(out, "ERR|USER_EXISTS"); return; }
-        log_event((int)sqlite3_last_insert_rowid(db), "REGISTER", v[3]);
+        log_event((int)sqlite3_last_insert_rowid(db), "REGISTER", "user");
         strcpy(out, "OK|REGISTERED"); return;
     }
     if (!strcmp(cmd, "LOGIN")) {
         if (n != 3 || c->user_id) return;
-        if (!prep(&s, "SELECT id,role,password FROM users WHERE username=?")) { strcpy(out, "ERR|DB"); return; }
+        if (!prep(&s, "SELECT id,password FROM users WHERE username=?")) { strcpy(out, "ERR|DB"); return; }
         sqlite3_bind_text(s, 1, v[1], -1, SQLITE_TRANSIENT);
-        if (sqlite3_step(s) == SQLITE_ROW && password_verify(v[2], (const char *)sqlite3_column_text(s, 2))) {
+        if (sqlite3_step(s) == SQLITE_ROW && password_verify(v[2], (const char *)sqlite3_column_text(s, 1))) {
             int user_id = sqlite3_column_int(s, 0);
             if (has_active_session(user_id, c)) {
                 strcpy(out, "ERR|ALREADY_LOGGED_IN");
                 log_event(user_id, "LOGIN_REJECTED_ACTIVE", "already connected");
             } else {
                 c->user_id = user_id;
-                snprintf(c->role, sizeof(c->role), "%s", sqlite3_column_text(s, 1));
                 snprintf(c->username, sizeof(c->username), "%s", v[1]);
-                snprintf(out, cap, "OK|LOGIN|%s", c->role);
+                strcpy(out, "OK|LOGIN");
                 log_event(c->user_id, "LOGIN", "success");
             }
         } else { strcpy(out, "ERR|CREDENTIALS"); log_event(0, "LOGIN_FAILED", v[1]); }
@@ -300,7 +296,7 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
     if (!strcmp(cmd, "LOGOUT")) {
         if (n != 1) return;
         log_event(c->user_id, "LOGOUT", "");
-        c->user_id = 0; c->username[0] = 0; c->role[0] = 0;
+        c->user_id = 0; c->username[0] = 0;
         strcpy(out, "OK|LOGOUT"); return;
     }
     if (!strcmp(cmd, "CREATE")) {
@@ -596,8 +592,6 @@ int main(int argc, char **argv) {
     int port = 9000;
     if (argc > 1 && !number(argv[1], 1, 65535, &port)) { fprintf(stderr, "Invalid port\n"); return 1; }
     const char *path = argc > 2 ? argv[2] : "question.db";
-    admin_code = getenv("EXAM_ADMIN_CODE");
-    if (!admin_code || !*admin_code) admin_code = "admin123";
     if (!net_init() || !init_db(path)) { fprintf(stderr, "Startup failed\n"); return 1; }
     pthread_mutex_lock(&db_mutex); log_event(0, "SERVER_STARTED", ""); pthread_mutex_unlock(&db_mutex);
     socket_t listen_sock = socket(AF_INET, SOCK_STREAM, 0);

@@ -30,4 +30,16 @@ Bộ kiểm thử gửi trực tiếp thông điệp CRLF dạng văn bản, ki�
 
 ## Giới hạn
 
-Chưa TLS hoặc giới hạn thử mật khẩu; PBKDF2 vẫn chạy dưới khóa SQLite chung. AWAIT dùng thăm dò 100 ms, một server không chia sẻ registry phiên với server khác. Cần đặt EXAM_ADMIN_CODE riêng. Cấu trúc SQLite và question.db được giữ tương thích.
+Chưa TLS hoặc giới hạn thử mật khẩu; PBKDF2 vẫn chạy dưới khóa SQLite chung. AWAIT dùng thăm dò 100 ms, một server không chia sẻ registry phiên với server khác. Cấu trúc SQLite và question.db được giữ tương thích.
+
+## Tài khoản thống nhất và tương thích database
+
+Ứng dụng đã bỏ vai trò admin/student và EXAM_ADMIN_CODE khỏi đăng ký, đăng nhập, menu và kiểm tra quyền. REGISTER chỉ nhận username password, LOGIN trả 111 không có tham số role. Quyền phụ thuộc người tạo phòng, thành viên phòng hoặc chủ bài cá nhân. Cột users.role được giữ như dữ liệu tương thích với database cũ; tài khoản mới ghi giá trị legacy student để đáp ứng ràng buộc cũ, không dùng cột này để phân quyền. Tài khoản admin cũ vẫn đăng nhập được như mọi tài khoản. Không xóa hoặc ghi đè question.db.
+
+## Các ca hồi quy được bổ sung
+
+- test_text_protocol: vòng đời phòng, UI thật thi/luyện tập, tiếng Việt, nhiều lệnh gộp một lần gửi, tự chấm phòng, điểm luyện tập chính xác.
+- test_sessions_results_restart: chặn login trùng, giải phóng phiên khi đóng AWAIT, khôi phục chính xác từng lựa chọn, đối chiếu toàn bộ trường đề với SQLite để bảo đảm không có trường correct, hash PBKDF2, nhiều thành viên, bảng điểm theo điểm, dữ liệu sau restart và tương thích tài khoản admin cũ.
+- test_quoting_escape_and_validation: khoảng trắng, tiếng Việt, dấu ngoặc kép, backslash được round-trip; chuỗi thiếu ngoặc/escape sai nhận 400; dữ liệu không hợp lệ, sai mật khẩu, không đủ câu, phòng chưa có người, tự chấm luyện tập.
+
+Đây là kiểm thử tích hợp trên socket thật. Không suy ra chất lượng từ số dòng test; các kiểm tra so sánh trực tiếp dữ liệu và trạng thái kỳ vọng.

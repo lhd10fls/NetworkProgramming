@@ -12,7 +12,7 @@ Tài liệu mô tả cách project hiện tại vận hành, từ khi server kh�
 | Server | Kiểm tra phiên/quyền, chọn đề, quyết định giờ, lưu đáp án và chấm điểm |
 | SQLite question.db | Lưu tài khoản, câu hỏi, phòng, bài làm, điểm và log |
 
-Chủ phòng có thể là student hoặc admin. Vai trò admin không cấp quyền bắt đầu phòng của người khác. Chủ phòng không tự động được ghi danh làm thí sinh. Phiên đăng nhập hiện tại gắn với socket và giữ trong bộ nhớ; tài khoản và bài làm được lưu lâu dài trong SQLite.
+Mọi tài khoản có cùng quyền cơ bản. Người tạo phòng là chủ phòng và chỉ được bắt đầu phòng của mình. Chủ phòng không tự động được ghi danh làm thí sinh. Phiên đăng nhập hiện tại gắn với socket và giữ trong bộ nhớ; tài khoản và bài làm được lưu lâu dài trong SQLite.
 
 ## 2. Khởi động server và database
 
@@ -28,7 +28,6 @@ Nếu mở/khởi tạo database thất bại, server báo Startup failed và kh
 
 ```powershell
 .\build-windows.ps1
-$env:EXAM_ADMIN_CODE='ma-rieng-cua-nhom'
 .\server.exe 9000 question.db
 ```
 
@@ -59,15 +58,15 @@ sequenceDiagram
 Mỗi dòng trong ví dụ được gửi với hai ký tự CR LF thực tế ở cuối. Chuỗi ký hiệu `\r\n` chỉ dùng để minh họa, không phải bốn chữ được gõ lên mạng.
 
 ```text
-Client → Server: REGISTER alice pw123 student ""\r\n
+Client → Server: REGISTER alice pw123\r\n
 Server → Client: 110\r\n
 Client → Server: LOGIN alice pw123\r\n
-Server → Client: 111 "student"\r\n
+Server → Client: 111\r\n
 ```
 
-Đăng ký ghi username, mật khẩu băm PBKDF2 và role vào users. Đăng ký không tự đăng nhập. Tên đã có trong cùng database nhận 409 USER_EXISTS. Đăng ký admin cần mã EXAM_ADMIN_CODE đúng; mã sai trả 403 ADMIN_CODE.
+Đăng ký ghi username và mật khẩu băm PBKDF2 vào users. Đăng ký không tự đăng nhập. Tên đã có trong cùng database nhận 409 USER_EXISTS.
 
-Đăng nhập đọc users, xác minh mật khẩu rồi kiểm tra tài khoản có phiên hoạt động không. Sai mật khẩu trả 401 CREDENTIALS; tài khoản đang đăng nhập nơi khác trả 409 ALREADY_LOGGED_IN. Thành công thì user_id, username, role được gắn với Client phía server; không phát token. Lệnh nghiệp vụ trước đăng nhập trả 401 LOGIN_REQUIRED.
+Đăng nhập đọc users, xác minh mật khẩu rồi kiểm tra tài khoản có phiên hoạt động không. Sai mật khẩu trả 401 CREDENTIALS; tài khoản đang đăng nhập nơi khác trả 409 ALREADY_LOGGED_IN. Thành công thì user_id, username được gắn với Client phía server; không phát token. Lệnh nghiệp vụ trước đăng nhập trả 401 LOGIN_REQUIRED.
 
 ```text
 KẾT NỐI, CHƯA ĐĂNG NHẬP
@@ -285,3 +284,7 @@ Chưa có TLS, giới hạn thử mật khẩu liên tục hoặc heartbeat. PBK
 6. Tạo phòng mới 1 câu/20 giây, JOIN rồi START; không nộp và đợi sự kiện hết giờ; xem automatic=1.
 7. Đăng xuất, đăng nhập lại; kiểm tra dữ liệu được giữ khi dùng cùng database.
 8. Bộ tự động: python tests/test_integration.py. Test dùng database tạm, không xóa question.db thật.
+
+## Tài khoản thống nhất và tương thích database
+
+Ứng dụng đã bỏ vai trò admin/student và EXAM_ADMIN_CODE khỏi đăng ký, đăng nhập, menu và kiểm tra quyền. REGISTER chỉ nhận username password, LOGIN trả 111 không có tham số role. Quyền phụ thuộc người tạo phòng, thành viên phòng hoặc chủ bài cá nhân. Cột users.role được giữ như dữ liệu tương thích với database cũ; tài khoản mới ghi giá trị legacy student để đáp ứng ràng buộc cũ, không dùng cột này để phân quyền. Tài khoản admin cũ vẫn đăng nhập được như mọi tài khoản. Không xóa hoặc ghi đè question.db.

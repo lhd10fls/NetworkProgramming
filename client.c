@@ -15,7 +15,6 @@
 static socket_t sock;
 static char response[MAX_FRAME + 1];
 static char username[64];
-static char role[16];
 static pthread_mutex_t response_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t response_cond = PTHREAD_COND_INITIALIZER;
 static pthread_t receiver_id;
@@ -97,13 +96,11 @@ static int clean(const char *s, size_t max) {
     return 1;
 }
 static void register_user(void) {
-    char user[64], pass[160], r[20], code[80] = "", msg[400];
+    char user[64], pass[160], msg[320];
     ask("Username: ", user, sizeof(user));
     ask("Password: ", pass, sizeof(pass));
-    ask("Role (student/admin): ", r, sizeof(r));
-    if (!strcmp(r, "admin")) ask("Admin code: ", code, sizeof(code));
-    if (!clean(user, 32) || !clean(pass, 128) || (strcmp(r, "student") && strcmp(r, "admin"))) return;
-    snprintf(msg, sizeof(msg), "REGISTER|%s|%s|%s|%s", user, pass, r, code);
+    if (!clean(user, 32) || !clean(pass, 128)) return;
+    snprintf(msg, sizeof(msg), "REGISTER|%s|%s", user, pass);
     if (request(msg)) puts(response);
 }
 static void login_user(void) {
@@ -111,11 +108,9 @@ static void login_user(void) {
     ask("Username: ", user, sizeof(user)); ask("Password: ", pass, sizeof(pass));
     if (!clean(user, 32) || !clean(pass, 128)) return;
     snprintf(msg, sizeof(msg), "LOGIN|%s|%s", user, pass);
-    if (request(msg) && ok("OK|LOGIN|")) {
+    if (request(msg) && ok("OK|LOGIN")) {
         snprintf(username, sizeof(username), "%s", user);
-        if (strcmp(response + 9, "admin") && strcmp(response + 9, "student")) { username[0] = 0; puts("Invalid role from server."); return; }
-        strcpy(role, response + 9);
-        printf("Logged in as %s (%s).\n", username, role);
+        printf("Logged in as %s.\n", username);
     }
 }
 static void list_rooms(void) {
@@ -307,7 +302,7 @@ int main(int argc, char **argv) {
             else if (!strcmp(choice, "2")) login_user();
             else if (!strcmp(choice, "0")) break;
         } else {
-            printf("\n%s (%s)\n1 List rooms  2 Create room  3 Join room  4 Start room\n5 Results  6 Practice  9 Logout  0 Exit\n", username, role);
+            printf("\n%s\n1 List rooms  2 Create room  3 Join room  4 Start room\n5 Results  6 Practice  9 Logout  0 Exit\n", username);
             ask("> ", choice, sizeof(choice));
             if (!strcmp(choice, "1")) list_rooms();
             else if (!strcmp(choice, "2")) create_room();
@@ -315,7 +310,7 @@ int main(int argc, char **argv) {
             else if (!strcmp(choice, "4")) start_room();
             else if (!strcmp(choice, "5")) show_results();
             else if (!strcmp(choice, "6")) practice();
-            else if (!strcmp(choice, "9")) { if (request("LOGOUT")) puts(response); username[0] = role[0] = 0; }
+            else if (!strcmp(choice, "9")) { if (request("LOGOUT")) puts(response); username[0] = 0; }
             else if (!strcmp(choice, "0")) break;
         }
     }

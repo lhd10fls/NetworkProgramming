@@ -19,7 +19,7 @@ Phản hồi danh sách hoặc đề dùng từ khóa ROW để bắt đầu m�
 | Mã | Ý nghĩa / dữ liệu theo sau |
 |---|---|
 | 110 | Đăng ký thành công |
-| 111 | Đăng nhập thành công, role |
+| 111 | Đăng nhập thành công, không có trường vai trò |
 | 112 | Đăng xuất thành công |
 | 120 | Tạo phòng thành công, trạng thái ban đầu WAITING |
 | 121 | Danh sách phòng: các ROW R room_name state count duration owner |
@@ -44,13 +44,13 @@ Phản hồi danh sách hoặc đề dùng từ khóa ROW để bắt đầu m�
 | 409 | Xung đột hoặc sai trạng thái nghiệp vụ |
 | 500 | Lỗi xử lý phía server |
 
-Mã lỗi dùng chung cho mọi nhóm lệnh. Ví dụ `400 BAD_REQUEST`, `400 UNKNOWN_COMMAND`, `401 LOGIN_REQUIRED`, `401 CREDENTIALS`, `403 ADMIN_CODE`, `403 FORBIDDEN`, `403 NOT_PARTICIPANT`, `404 ROOM_NOT_FOUND`, `404 PRACTICE_NOT_FOUND`, `409 USER_EXISTS`, `409 ROOM_EXISTS`, `409 ALREADY_LOGGED_IN`, `409 ROOM_NOT_WAITING`, `409 ROOM_FULL`, `409 NO_PARTICIPANTS`, `409 EXAM_CLOSED`, `409 PRACTICE_CLOSED`, `409 ROOM_NOT_FINISHED`, `409 NOT_ENOUGH_QUESTIONS`, `409 NOT_RUNNING`, `409 RESULT_NOT_READY`, `500 DB`, `500 PASSWORD_HASH`. Client dùng mã số để phân nhóm và reason để giải thích. Các lỗi truyền tải có thể đóng kết nối mà không trả mã.
+Mã lỗi dùng chung cho mọi nhóm lệnh. Ví dụ `400 BAD_REQUEST`, `400 UNKNOWN_COMMAND`, `401 LOGIN_REQUIRED`, `401 CREDENTIALS`, `403 FORBIDDEN`, `403 NOT_PARTICIPANT`, `404 ROOM_NOT_FOUND`, `404 PRACTICE_NOT_FOUND`, `409 USER_EXISTS`, `409 ROOM_EXISTS`, `409 ALREADY_LOGGED_IN`, `409 ROOM_NOT_WAITING`, `409 ROOM_FULL`, `409 NO_PARTICIPANTS`, `409 EXAM_CLOSED`, `409 PRACTICE_CLOSED`, `409 ROOM_NOT_FINISHED`, `409 NOT_ENOUGH_QUESTIONS`, `409 NOT_RUNNING`, `409 RESULT_NOT_READY`, `500 DB`, `500 PASSWORD_HASH`. Client dùng mã số để phân nhóm và reason để giải thích. Các lỗi truyền tải có thể đóng kết nối mà không trả mã.
 
 ## 4. Hành động, trạng thái và quyền
 
-AWAIT là hành động chờ phản hồi, WAITING là trạng thái phòng. Không dùng WAIT làm tên lệnh trên mạng. Trạng thái phòng là WAITING, RUNNING, FINISHED. REGISTER không tự đăng nhập. LOGIN thành công gắn user_id/role vào socket; LOGOUT hoặc ngắt kết nối giải phóng phiên.
+AWAIT là hành động chờ phản hồi, WAITING là trạng thái phòng. Không dùng WAIT làm tên lệnh trên mạng. Trạng thái phòng là WAITING, RUNNING, FINISHED. REGISTER không tự đăng nhập. LOGIN thành công gắn user_id/username vào socket; LOGOUT hoặc ngắt kết nối giải phóng phiên.
 
-Bất kỳ tài khoản đã đăng nhập đều được CREATE ROOM. Chỉ người tạo phòng được START ROOM; admin không được bắt đầu phòng người khác. Chỉ thành viên được AWAIT/QUESTIONS/ANSWER/SUBMIT/STATUS ROOM. RESULTS ROOM chỉ cho chủ phòng hoặc thành viên, sau FINISHED. Lệnh PRACTICE theo phạm vi chỉ truy cập bài của chính tài khoản đó. Không còn chức năng thêm câu hỏi và đổi mật khẩu qua giao thức/menu. Ngân hàng mẫu được quản lý trong seed_questions.c.
+Bất kỳ tài khoản đã đăng nhập đều được CREATE ROOM. Chỉ người tạo phòng được START ROOM; người dùng khác không được bắt đầu phòng này. Chỉ thành viên được AWAIT/QUESTIONS/ANSWER/SUBMIT/STATUS ROOM. RESULTS ROOM chỉ cho chủ phòng hoặc thành viên, sau FINISHED. Lệnh PRACTICE theo phạm vi chỉ truy cập bài của chính tài khoản đó. Không còn chức năng thêm câu hỏi và đổi mật khẩu qua giao thức/menu. Ngân hàng mẫu được quản lý trong seed_questions.c.
 
 AWAIT giữ yêu cầu khoảng tối đa 30 giây. Server kiểm tra trạng thái mỗi 100 ms; chưa bắt đầu thì trả 124 và client gửi AWAIT lại. Khi RUNNING, trả 125. Khi FINISHED, trả 130 hoặc lỗi nếu chưa có kết quả. Gửi một yêu cầu và đợi phản hồi chính trước yêu cầu kế tiếp, không có request ID. Sự kiện 210 có thể xen giữa; receiver_thread nhận diện riêng.
 
@@ -60,12 +60,11 @@ AWAIT giữ yêu cầu khoảng tối đa 30 giây. Server kiểm tra trạng th
 
 | Yêu cầu | Phản hồi thành công |
 |---|---|
-| REGISTER username password student "" | 110 |
-| REGISTER username password admin admin_code | 110 |
-| LOGIN username password | 111 "student" hoặc 111 "admin" |
+| REGISTER username password | 110 |
+| LOGIN username password | 111 |
 | LOGOUT | 112 |
 
-Username tối đa 32 byte; password đăng ký tối đa 128 byte; tên không trùng trong cùng database. Admin cần EXAM_ADMIN_CODE. Hiện chưa có TLS; mật khẩu chỉ được băm khi lưu.
+Username tối đa 32 byte; password đăng ký tối đa 128 byte; tên không trùng trong cùng database. Hiện chưa có TLS; mật khẩu chỉ được băm khi lưu.
 
 ### 5.2. Phòng thi và bài luyện tập dùng chung ngân hàng
 
@@ -96,7 +95,7 @@ room_name: tên phòng thi, không phải username hay topic; tối đa 48 byte.
 Các ví dụ dưới đây đều phải thêm CRLF ở cuối khi gửi. Không có dấu | trên mạng.
 
 ```text
-111 "student"
+111
 121 ROW "R" "PhongA" "WAITING" "2" "60" "teacher"
 125 "PhongA" "1795000000" "2" ROW "Q" "1" "2 + 3 bằng bao nhiêu?" "4" "5" "6" "7" "" ROW "Q" "2" "Một tuần có mấy ngày?" "5" "7" "6" "8" "B"
 127 "1" "2"
@@ -116,3 +115,7 @@ Luyện tập: LOGIN → CREATE PRACTICE → 131 ID/hạn giờ → QUESTIONS PR
 ## 8. Triển khai và kiểm chứng
 
 net.c/net.h thực hiện codec văn bản, quoting, ROW và CRLF. Chuỗi phân trường nội bộ chỉ để tái sử dụng phần nghiệp vụ; request/response trên socket tuân theo tài liệu này. server.c giữ máy trạng thái, quyền và SQLite; client.c giữ menu và luồng nhận sự kiện. Bộ kiểm thử tests/test_integration.py gửi trực tiếp giao thức mới, kiểm tra dữ liệu chia nhỏ, nhiều dòng gộp một lần gửi, quyền, tạo/thi/nộp, luyện tập, sự kiện hết giờ, UTF-8 và client thật. Giao thức mới không tương thích client/server phiên bản cũ; cần biên dịch cả hai phía.
+
+## Tài khoản thống nhất và tương thích database
+
+Ứng dụng đã bỏ vai trò admin/student và EXAM_ADMIN_CODE khỏi đăng ký, đăng nhập, menu và kiểm tra quyền. REGISTER chỉ nhận username password, LOGIN trả 111 không có tham số role. Quyền phụ thuộc người tạo phòng, thành viên phòng hoặc chủ bài cá nhân. Cột users.role được giữ như dữ liệu tương thích với database cũ; tài khoản mới ghi giá trị legacy student để đáp ứng ràng buộc cũ, không dùng cột này để phân quyền. Tài khoản admin cũ vẫn đăng nhập được như mọi tài khoản. Không xóa hoặc ghi đè question.db.

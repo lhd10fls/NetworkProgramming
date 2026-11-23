@@ -48,7 +48,6 @@ Mở ít nhất ba terminal:
 
 ```powershell
 # Terminal 1
-$env:EXAM_ADMIN_CODE='ma-bi-mat-cua-nhom'
 .\server.exe 9000 question.db
 
 # Terminal 2: người tạo phòng
@@ -58,11 +57,11 @@ $env:EXAM_ADMIN_CODE='ma-bi-mat-cua-nhom'
 .\client.exe 127.0.0.1 9000
 ```
 
-Trong terminal 2, đăng ký và đăng nhập, rồi chọn **Create room**. Khi khởi tạo database rỗng, server nạp 20 câu hỏi mẫu **bằng tiếng Việt** về toán học, con vật, cây cối và đời sống; có thể tạo phòng hoặc luyện tập ngay. Client Windows đặt bảng mã console UTF-8 để hiển thị dấu tiếng Việt. Tài khoản student và admin đều có quyền tạo phòng; chỉ chủ phòng được bắt đầu phòng. Trong terminal 3, đăng ký và đăng nhập, chọn **Join room**. Client sẽ chờ. Quay về terminal 2, chọn **Start room**; terminal 3 nhận đề và bắt đầu làm. Sau khi nộp hoặc hết giờ, dùng **Results** để xem điểm.
+Trong terminal 2, đăng ký và đăng nhập, rồi chọn **Create room**. Khi khởi tạo database rỗng, server nạp 20 câu hỏi mẫu **bằng tiếng Việt** về toán học, con vật, cây cối và đời sống; có thể tạo phòng hoặc luyện tập ngay. Client Windows đặt bảng mã console UTF-8 để hiển thị dấu tiếng Việt. Mọi tài khoản đều có quyền tạo phòng; chỉ chủ phòng được bắt đầu phòng. Trong terminal 3, đăng ký và đăng nhập, chọn **Join room**. Client sẽ chờ. Quay về terminal 2, chọn **Start room**; terminal 3 nhận đề và bắt đầu làm. Sau khi nộp hoặc hết giờ, dùng **Results** để xem điểm.
 
 Câu hỏi mẫu chỉ được nạp khi bảng `questions` đang rỗng; khởi động lại server không tạo thêm bản sao. File `question.db` dùng cho bộ 20 câu tiếng Việt mới và được tạo tự động nếu chưa có. Các database demo cũ không bị thay đổi; nếu truyền tên file database khác khi chạy server, chương trình sẽ dùng nội dung của file đó. Muốn dùng ngân hàng câu hỏi tự chuẩn bị, đặt `EXAM_SKIP_SEED=1` trước khi chạy server lần đầu, sau đó chuẩn bị dữ liệu SQLite ngoài ứng dụng.
 
-`EXAM_ADMIN_CODE` mặc định là `admin123` nếu không đặt biến môi trường; nên đặt mã khác khi demo. Server mặc định dùng cổng `9000` và `question.db`. Client mặc định kết nối `127.0.0.1:9000`.
+Server mặc định dùng cổng `9000` và `question.db`. Client mặc định kết nối `127.0.0.1:9000`.
 
 ## Kiểm thử
 
@@ -70,4 +69,8 @@ Sau khi biên dịch, chạy `python tests/test_integration.py`. Kiểm thử d�
 
 ## Giới hạn
 
-Chưa có TLS, chống thử mật khẩu liên tục hoặc phiên bản giao thức. EXAM_ADMIN_CODE vẫn cần được đặt riêng khi demo. Mỗi phòng tối đa 32 người, đề tối đa 50 câu nhưng phải đủ câu trong ngân hàng. Server dùng một khóa SQLite chung, WAIT nội bộ thăm dò mỗi 100 ms; trên giao thức lệnh này mang tên AWAIT ROOM. Đây là ứng dụng phục vụ môn học trong mạng tin cậy.
+Chưa có TLS, chống thử mật khẩu liên tục hoặc phiên bản giao thức. Mỗi phòng tối đa 32 người, đề tối đa 50 câu nhưng phải đủ câu trong ngân hàng. Server dùng một khóa SQLite chung, WAIT nội bộ thăm dò mỗi 100 ms; trên giao thức lệnh này mang tên AWAIT ROOM. Đây là ứng dụng phục vụ môn học trong mạng tin cậy.
+
+## Tài khoản thống nhất và tương thích database
+
+Ứng dụng đã bỏ vai trò admin/student và EXAM_ADMIN_CODE khỏi đăng ký, đăng nhập, menu và kiểm tra quyền. REGISTER chỉ nhận username password, LOGIN trả 111 không có tham số role. Quyền phụ thuộc người tạo phòng, thành viên phòng hoặc chủ bài cá nhân. Cột users.role được giữ như dữ liệu tương thích với database cũ; tài khoản mới ghi giá trị legacy student để đáp ứng ràng buộc cũ, không dùng cột này để phân quyền. Tài khoản admin cũ vẫn đăng nhập được như mọi tài khoản. Không xóa hoặc ghi đè question.db.

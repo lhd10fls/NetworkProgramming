@@ -58,7 +58,7 @@ static const Mapping mappings[] = {
     {"ERR|BAD_REQUEST", "400 BAD_REQUEST"}, {"ERR|TOO_MANY_FIELDS", "400 TOO_MANY_FIELDS"},
     {"ERR|UNKNOWN_COMMAND", "400 UNKNOWN_COMMAND"},
     {"ERR|LOGIN_REQUIRED", "401 LOGIN_REQUIRED"}, {"ERR|CREDENTIALS", "401 CREDENTIALS"},
-    {"ERR|ADMIN_CODE", "403 ADMIN_CODE"}, {"ERR|FORBIDDEN", "403 FORBIDDEN"},
+    {"ERR|FORBIDDEN", "403 FORBIDDEN"},
     {"ERR|NOT_PARTICIPANT", "403 NOT_PARTICIPANT"},
     {"ERR|ROOM_NOT_FOUND", "404 ROOM_NOT_FOUND"}, {"ERR|PRACTICE_NOT_FOUND", "404 PRACTICE_NOT_FOUND"},
     {"ERR|USER_EXISTS", "409 USER_EXISTS"}, {"ERR|ROOM_EXISTS", "409 ROOM_EXISTS"},
@@ -154,7 +154,7 @@ int recv_frame(socket_t s,char *out,size_t capacity) {
     }
     wire[n]=0;
     if(decode(wire,out,capacity))return 1;
-    if(sending_response && capacity>=12){strcpy(out,"UNSUPPORTED");return 1;}
+    if(sending_response && capacity>=12){strcpy(out,"MALFORMED");return 1;}
     return 0;
 }
 int valid_field(const char *s, size_t max_len) {
