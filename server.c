@@ -260,6 +260,23 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
     const char *cmd = v[0];
     strcpy(out, "ERR|BAD_REQUEST");
     if (!strcmp(cmd, "MALFORMED")) return;
+    /* Normalize only scoped actions; usernames may also be ROOM/PRACTICE. */
+    int room_action = !strcmp(cmd, "CREATE") || !strcmp(cmd, "QUESTIONS") ||
+        !strcmp(cmd, "ANSWER") || !strcmp(cmd, "SUBMIT") || !strcmp(cmd, "STATUS");
+    int only_room = !strcmp(cmd, "JOIN") || !strcmp(cmd, "START") ||
+        !strcmp(cmd, "AWAIT") || !strcmp(cmd, "RESULTS");
+    int list_action = !strcmp(cmd, "LIST");
+    int practice_mode = 0;
+    if (room_action || only_room || list_action) {
+        if (n < 2) return;
+        practice_mode = !strcmp(v[1], "PRACTICE");
+        int valid_scope = (room_action && (!strcmp(v[1], "ROOM") || practice_mode)) ||
+            (only_room && !strcmp(v[1], "ROOM")) ||
+            (list_action && !strcmp(v[1], "ROOMS"));
+        if (!valid_scope) return;
+        for (int i = 1; i < n - 1; ++i) v[i] = v[i + 1];
+        --n;
+    }
     if (!strcmp(cmd, "REGISTER")) {
         if (n != 3 || c->user_id || !valid_field(v[1], 32) || !valid_field(v[2], 128)) return;
         char password_value[128];
@@ -299,7 +316,7 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         c->user_id = 0; c->username[0] = 0;
         strcpy(out, "OK|LOGOUT"); return;
     }
-    if (!strcmp(cmd, "CREATE")) {
+    if (!practice_mode && !strcmp(cmd, "CREATE")) {
         int count, duration;
         if (n != 4 || !valid_field(v[1], 48) || !number(v[2], 1, MAX_QUESTIONS, &count) ||
             !number(v[3], 10, MAX_DURATION, &duration)) return;
@@ -365,7 +382,7 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         log_event(c->user_id, "START_ROOM", v[1]);
         strcpy(out, "OK|STARTED"); return;
     }
-    if (!strcmp(cmd, "EXAM") || !strcmp(cmd, "WAIT")) {
+    if (!practice_mode && (!strcmp(cmd, "QUESTIONS") || !strcmp(cmd, "AWAIT"))) {
         if (n != 2) return;
         int room = room_id(v[1]);
         if (!room) { strcpy(out, "ERR|ROOM_NOT_FOUND"); return; }
@@ -382,7 +399,7 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         else strcpy(out, "ERR|RESULT_NOT_READY");
         sqlite3_finalize(s); return;
     }
-    if (!strcmp(cmd, "ANSWER")) {
+    if (!practice_mode && !strcmp(cmd, "ANSWER")) {
         int position;
         if (n != 4 || !number(v[2], 1, MAX_QUESTIONS, &position) || strlen(v[3]) != 1 || !strchr("ABCD", v[3][0])) return;
         int room = room_id(v[1]);
@@ -397,7 +414,7 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         int ok = sqlite3_step(s) == SQLITE_DONE; sqlite3_finalize(s);
         strcpy(out, ok ? "OK|ANSWER_SAVED" : "ERR|DB"); return;
     }
-    if (!strcmp(cmd, "SUBMIT")) {
+    if (!practice_mode && !strcmp(cmd, "SUBMIT")) {
         if (n != 2) return;
         int room = room_id(v[1]);
         if (!room || !member(room, c->user_id)) { strcpy(out, "ERR|NOT_PARTICIPANT"); return; }
@@ -420,7 +437,7 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         finish_room_if_done(room);
         snprintf(out, cap, "SCORE|%d|%d", score, total); return;
     }
-    if (!strcmp(cmd, "STATUS")) {
+    if (!practice_mode && !strcmp(cmd, "STATUS")) {
         if (n != 2) return;
         int room = room_id(v[1]);
         if (!room || !member(room, c->user_id)) { strcpy(out, "ERR|NOT_PARTICIPANT"); return; }
@@ -454,7 +471,7 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
                    sqlite3_column_int(s, 2), sqlite3_column_int(s, 3));
         sqlite3_finalize(s); return;
     }
-    if (!strcmp(cmd, "PRACTICE")) {
+    if (practice_mode && !strcmp(cmd, "CREATE")) {
         int count, duration;
         if (n != 3 || !number(v[1], 1, MAX_QUESTIONS, &count) || !number(v[2], 10, MAX_DURATION, &duration)) return;
         if (question_count() < count) { strcpy(out, "ERR|NOT_ENOUGH_QUESTIONS"); return; }
@@ -470,9 +487,9 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         ok = sqlite3_step(s) == SQLITE_DONE; sqlite3_finalize(s);
         if (!ok || !sql("COMMIT")) { sql("ROLLBACK"); strcpy(out, "ERR|DB"); return; }
         log_event(c->user_id, "START_PRACTICE", "");
-        snprintf(out, cap, "PRACTICE|%d|%lld|%d", id, (long long)end_at, count); return;
+        snprintf(out, cap, "CREATED|PRACTICE|%d|%lld|%d", id, (long long)end_at, count); return;
     }
-    if (!strcmp(cmd, "PQUESTION")) {
+    if (practice_mode && !strcmp(cmd, "QUESTIONS")) {
         int id, position;
         if (n != 3 || !number(v[1], 1, 1000000000, &id) || !number(v[2], 1, MAX_QUESTIONS, &position)) return;
         if (!prep(&s, "SELECT q.text,q.a,q.b,q.c,q.d FROM practices p JOIN practice_questions pq ON pq.practice_id=p.id JOIN questions q ON q.id=pq.question_id WHERE p.id=? AND p.user_id=? AND p.score IS NULL AND p.end_at>? AND pq.position=?")) { strcpy(out, "ERR|DB"); return; }
@@ -485,7 +502,7 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         else strcpy(out, "ERR|PRACTICE_CLOSED");
         sqlite3_finalize(s); return;
     }
-    if (!strcmp(cmd, "PANSWER")) {
+    if (practice_mode && !strcmp(cmd, "ANSWER")) {
         int id, position;
         if (n != 4 || !number(v[1], 1, 1000000000, &id) || !number(v[2], 1, MAX_QUESTIONS, &position) ||
             strlen(v[3]) != 1 || !strchr("ABCD", v[3][0])) return;
@@ -499,7 +516,7 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         int ok = sqlite3_step(s) == SQLITE_DONE; sqlite3_finalize(s);
         strcpy(out, ok ? "OK|ANSWER_SAVED" : "ERR|DB"); return;
     }
-    if (!strcmp(cmd, "PSUBMIT") || !strcmp(cmd, "PSTATUS")) {
+    if (practice_mode && (!strcmp(cmd, "SUBMIT") || !strcmp(cmd, "STATUS"))) {
         int id;
         if (n != 2 || !number(v[1], 1, 1000000000, &id)) return;
         if (!prep(&s, "SELECT count,end_at,score FROM practices WHERE id=? AND user_id=?")) { strcpy(out, "ERR|DB"); return; }
@@ -509,8 +526,8 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         int done = sqlite3_column_type(s, 2) != SQLITE_NULL;
         int score = done ? sqlite3_column_int(s, 2) : 0;
         sqlite3_finalize(s);
-        if (done) { snprintf(out, cap, "PSCORE|%d|%d", score, count); return; }
-        if (!strcmp(cmd, "PSTATUS")) { snprintf(out, cap, "PSTATUS|RUNNING|%lld", end); return; }
+        if (done) { snprintf(out, cap, "SCORE|PRACTICE|%d|%d", score, count); return; }
+        if (!strcmp(cmd, "STATUS")) { snprintf(out, cap, "STATUS|PRACTICE|RUNNING|%lld", end); return; }
         if (end <= (long long)time(NULL)) { finish_expired(); strcpy(out, "ERR|PRACTICE_CLOSED"); return; }
         if (!prep(&s, "UPDATE practices SET score=(SELECT COUNT(*) FROM practice_questions pq JOIN questions q ON q.id=pq.question_id JOIN practice_answers a ON a.practice_id=pq.practice_id AND a.position=pq.position WHERE pq.practice_id=? AND a.selected=q.correct),submitted_at=? WHERE id=? AND score IS NULL")) { strcpy(out, "ERR|DB"); return; }
         sqlite3_bind_int(s, 1, id); sqlite3_bind_int64(s, 2, (sqlite3_int64)time(NULL)); sqlite3_bind_int(s, 3, id);
@@ -519,7 +536,7 @@ static void dispatch(Client *c, char **v, int n, char *out, size_t cap) {
         log_event(c->user_id, "SUBMIT_PRACTICE", "");
         if (prep(&s, "SELECT score FROM practices WHERE id=?")) {
             sqlite3_bind_int(s, 1, id);
-            snprintf(out, cap, "PSCORE|%d|%d", scalar(s), count);
+            snprintf(out, cap, "SCORE|PRACTICE|%d|%d", scalar(s), count);
         }
         return;
     }
@@ -550,7 +567,7 @@ static void *client_thread(void *arg) {
     pthread_mutex_unlock(&db_mutex);
     while (recv_frame(c->sock, request, sizeof(request))) {
         char *v[16]; int n = fields(request, v, 16);
-        int wait = n == 2 && !strcmp(v[0], "WAIT");
+        int wait = n == 3 && !strcmp(v[0], "AWAIT") && !strcmp(v[1], "ROOM");
         int disconnected = 0;
         if (wait) {
             /* Long polling: a participant is notified with the entire exam as soon as START runs. */
@@ -558,7 +575,8 @@ static void *client_thread(void *arg) {
                 if (peer_closed(c->sock)) { disconnected = 1; break; }
                 pthread_mutex_lock(&db_mutex);
                 finish_expired();
-                dispatch(c, v, n, response, sizeof(response));
+                char *wait_fields[] = {"AWAIT", "ROOM", v[2]};
+                dispatch(c, wait_fields, 3, response, sizeof(response));
                 pthread_mutex_unlock(&db_mutex);
                 if (strcmp(response, "WAITING")) break;
                 sleep_ms(100);

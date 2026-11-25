@@ -114,7 +114,7 @@ static void login_user(void) {
     }
 }
 static void list_rooms(void) {
-    if (!request("LIST") || !ok("ROOMS")) return;
+    if (!request("LIST|ROOMS") || !ok("ROOMS")) return;
     puts("Room\tStatus\tQuestions\tDuration(s)\tOwner");
     char *line = strchr(response, '\n');
     while (line) {
@@ -133,19 +133,19 @@ static void create_room(void) {
     ask("Number of questions (1-50): ", count, sizeof(count));
     ask("Duration in seconds (10-86400): ", duration, sizeof(duration));
     if (!clean(name, 48)) return;
-    snprintf(msg, sizeof(msg), "CREATE|%s|%s|%s", name, count, duration);
+    snprintf(msg, sizeof(msg), "CREATE|ROOM|%s|%s|%s", name, count, duration);
     if (request(msg)) puts(response);
 }
 static void start_room(void) {
     char name[64], msg[100]; ask("Room to start: ", name, sizeof(name));
     if (!clean(name, 48)) return;
-    snprintf(msg, sizeof(msg), "START|%s", name);
+    snprintf(msg, sizeof(msg), "START|ROOM|%s", name);
     if (request(msg)) puts(response);
 }
 static void show_results(void) {
     char name[64], msg[100]; ask("Room name: ", name, sizeof(name));
     if (!clean(name, 48)) return;
-    snprintf(msg, sizeof(msg), "RESULTS|%s", name);
+    snprintf(msg, sizeof(msg), "RESULTS|ROOM|%s", name);
     if (!request(msg) || !ok("RESULTS")) return;
     puts("User\tCorrect\tTotal\tAuto submitted");
     char *line = strchr(response, '\n');
@@ -203,7 +203,7 @@ static void exam_menu(const char *name, char *payload) {
     for (int i = 0; i < count; ++i) print_question(i + 1, &questions[i]);
     char input[32], choice[12], msg[160];
     for (; !stdin_closed;) {
-        snprintf(msg, sizeof(msg), "STATUS|%s", name);
+        snprintf(msg, sizeof(msg), "STATUS|ROOM|%s", name);
         if (!request(msg)) return;
         if (!strncmp(response, "SCORE|", 6)) { printf("Your result: %s\n", response + 6); return; }
         if (strncmp(response, "STATUS|RUNNING|", 15)) { puts(response); return; }
@@ -213,7 +213,7 @@ static void exam_menu(const char *name, char *payload) {
         for (int i = 0; i < count; ++i)
             printf("%d. %s [%c]\n", i + 1, questions[i].text, questions[i].selected ? questions[i].selected : '-');
         if (!ask_until("Question number, 's' to submit, 'r' to refresh: ", input, sizeof(input), end_at)) {
-            snprintf(msg, sizeof(msg), "STATUS|%s", name);
+            snprintf(msg, sizeof(msg), "STATUS|ROOM|%s", name);
             if (request(msg)) printf("\nTime up. %s\n", response);
             return;
         }
@@ -221,7 +221,7 @@ static void exam_menu(const char *name, char *payload) {
         if (!strcmp(input, "s")) {
             if (!ask_until("Submit now? (y/n): ", choice, sizeof(choice), end_at)) continue;
             if (strcmp(choice, "y")) continue;
-            snprintf(msg, sizeof(msg), "SUBMIT|%s", name);
+            snprintf(msg, sizeof(msg), "SUBMIT|ROOM|%s", name);
             if (!request(msg)) return;
             if (!strncmp(response, "SCORE|", 6)) { printf("Your result: %s\n", response + 6); return; }
             puts(response); continue;
@@ -232,7 +232,7 @@ static void exam_menu(const char *name, char *payload) {
         if (!ask_until("Answer A/B/C/D: ", choice, sizeof(choice), end_at)) continue;
         if (strlen(choice) != 1 || !strchr("ABCDabcd", choice[0])) { puts("Invalid option."); continue; }
         char answer = (char)toupper((unsigned char)choice[0]);
-        snprintf(msg, sizeof(msg), "ANSWER|%s|%ld|%c", name, x, answer);
+        snprintf(msg, sizeof(msg), "ANSWER|ROOM|%s|%ld|%c", name, x, answer);
         if (!request(msg)) return;
         if (ok("OK|ANSWER_SAVED")) questions[x - 1].selected = answer;
     }
@@ -240,10 +240,10 @@ static void exam_menu(const char *name, char *payload) {
 static void join_room(void) {
     char name[64], msg[100]; ask("Room name: ", name, sizeof(name));
     if (!clean(name, 48)) return;
-    snprintf(msg, sizeof(msg), "JOIN|%s", name);
+    snprintf(msg, sizeof(msg), "JOIN|ROOM|%s", name);
     if (!request(msg) || !ok("OK|JOINED")) return;
     puts("Joined. Waiting for the room owner to start the exam...");
-    snprintf(msg, sizeof(msg), "WAIT|%s", name);
+    snprintf(msg, sizeof(msg), "AWAIT|ROOM|%s", name);
     for (;;) {
         if (!request(msg)) return;
         if (!strcmp(response, "WAITING")) { puts("Still waiting..."); continue; }
@@ -257,25 +257,25 @@ static void practice(void) {
     char count_text[16], duration[16], msg[160], input[32], choice[12];
     ask("Number of questions (1-50): ", count_text, sizeof(count_text));
     ask("Duration in seconds (10-86400): ", duration, sizeof(duration));
-    snprintf(msg, sizeof(msg), "PRACTICE|%s|%s", count_text, duration);
-    if (!request(msg) || !ok("PRACTICE|")) return;
+    snprintf(msg, sizeof(msg), "CREATE|PRACTICE|%s|%s", count_text, duration);
+    if (!request(msg) || !ok("CREATED|PRACTICE|")) return;
     int id, count; long long end_at;
-    if (sscanf(response, "PRACTICE|%d|%lld|%d", &id, &end_at, &count) != 3 || count < 1 || count > 50) return;
+    if (sscanf(response, "CREATED|PRACTICE|%d|%lld|%d", &id, &end_at, &count) != 3 || count < 1 || count > 50) return;
     for (int pos = 1; pos <= count; ++pos) {
-        snprintf(msg, sizeof(msg), "PQUESTION|%d|%d", id, pos);
+        snprintf(msg, sizeof(msg), "QUESTIONS|PRACTICE|%d|%d", id, pos);
         if (!request(msg) || !ok("Q|")) break;
         Question q; if (!parse_question(response, &q)) { puts("Invalid question."); break; }
         print_question(pos, &q);
         printf("Time left: %lld seconds\n", end_at - (long long)time(NULL));
         if (!ask_until("Answer A/B/C/D, or Enter to skip: ", input, sizeof(input), end_at)) break;
         if (strlen(input) == 1 && strchr("ABCDabcd", input[0])) {
-            snprintf(msg, sizeof(msg), "PANSWER|%d|%d|%c", id, pos, toupper((unsigned char)input[0]));
+            snprintf(msg, sizeof(msg), "ANSWER|PRACTICE|%d|%d|%c", id, pos, toupper((unsigned char)input[0]));
             if (!request(msg)) return;
             if (strncmp(response, "OK|", 3)) { puts(response); break; }
         }
     }
     if (!ask_until("Submit practice now? (y to submit, any key to check status): ", choice, sizeof(choice), end_at)) strcpy(choice, "y");
-    snprintf(msg, sizeof(msg), "%s|%d", !strcmp(choice, "y") ? "PSUBMIT" : "PSTATUS", id);
+    snprintf(msg, sizeof(msg), "%s|PRACTICE|%d", !strcmp(choice, "y") ? "SUBMIT" : "STATUS", id);
     if (request(msg)) puts(response);
 }
 int main(int argc, char **argv) {
@@ -302,7 +302,7 @@ int main(int argc, char **argv) {
             else if (!strcmp(choice, "2")) login_user();
             else if (!strcmp(choice, "0")) break;
         } else {
-            printf("\n%s\n1 List rooms  2 Create room  3 Join room  4 Start room\n5 Results  6 Practice  9 Logout  0 Exit\n", username);
+            printf("\n%s\n1 List rooms  2 Create room  3 Join room  4 Start room\n5 Results  6 Practice  7 Logout  0 Exit\n", username);
             ask("> ", choice, sizeof(choice));
             if (!strcmp(choice, "1")) list_rooms();
             else if (!strcmp(choice, "2")) create_room();
@@ -310,7 +310,7 @@ int main(int argc, char **argv) {
             else if (!strcmp(choice, "4")) start_room();
             else if (!strcmp(choice, "5")) show_results();
             else if (!strcmp(choice, "6")) practice();
-            else if (!strcmp(choice, "9")) { if (request("LOGOUT")) puts(response); username[0] = 0; }
+            else if (!strcmp(choice, "7")) { if (request("LOGOUT")) puts(response); username[0] = 0; }
             else if (!strcmp(choice, "0")) break;
         }
     }

@@ -42,18 +42,18 @@ static int send_all(socket_t s, const unsigned char *p, size_t n) {
 typedef struct { const char *internal, *wire; } Mapping;
 static const Mapping mappings[] = {
     {"REGISTER", "REGISTER"}, {"LOGIN", "LOGIN"}, {"LOGOUT", "LOGOUT"},
-    {"CREATE", "CREATE ROOM"}, {"LIST", "LIST ROOMS"}, {"JOIN", "JOIN ROOM"},
-    {"START", "START ROOM"}, {"WAIT", "AWAIT ROOM"}, {"EXAM", "QUESTIONS ROOM"},
-    {"ANSWER", "ANSWER ROOM"}, {"SUBMIT", "SUBMIT ROOM"}, {"STATUS", "STATUS ROOM"},
-    {"RESULTS", "RESULTS ROOM"}, {"PRACTICE", "CREATE PRACTICE"},
-    {"PQUESTION", "QUESTIONS PRACTICE"}, {"PANSWER", "ANSWER PRACTICE"},
-    {"PSUBMIT", "SUBMIT PRACTICE"}, {"PSTATUS", "STATUS PRACTICE"},
+    {"CREATE|ROOM", "CREATE ROOM"}, {"LIST|ROOMS", "LIST ROOMS"}, {"JOIN|ROOM", "JOIN ROOM"},
+    {"START|ROOM", "START ROOM"}, {"AWAIT|ROOM", "AWAIT ROOM"}, {"QUESTIONS|ROOM", "QUESTIONS ROOM"},
+    {"ANSWER|ROOM", "ANSWER ROOM"}, {"SUBMIT|ROOM", "SUBMIT ROOM"}, {"STATUS|ROOM", "STATUS ROOM"},
+    {"RESULTS|ROOM", "RESULTS ROOM"}, {"CREATE|PRACTICE", "CREATE PRACTICE"},
+    {"QUESTIONS|PRACTICE", "QUESTIONS PRACTICE"}, {"ANSWER|PRACTICE", "ANSWER PRACTICE"},
+    {"SUBMIT|PRACTICE", "SUBMIT PRACTICE"}, {"STATUS|PRACTICE", "STATUS PRACTICE"},
     {"OK|REGISTERED", "110"}, {"OK|LOGIN", "111"}, {"OK|LOGOUT", "112"},
     {"OK|ROOM|WAITING", "120"}, {"ROOMS", "121"}, {"OK|JOINED", "122"},
     {"OK|STARTED", "123"}, {"WAITING", "124"}, {"EXAM", "125"},
     {"OK|ANSWER_SAVED", "126"}, {"SCORE", "127"}, {"STATUS", "128"},
-    {"RESULTS", "129"}, {"FINISHED", "130"}, {"PRACTICE", "131"},
-    {"Q", "132"}, {"PSCORE", "133"}, {"PSTATUS", "134"},
+    {"RESULTS", "129"}, {"FINISHED", "130"}, {"CREATED|PRACTICE", "131"},
+    {"Q", "132"}, {"SCORE|PRACTICE", "133"}, {"STATUS|PRACTICE", "134"},
     {"EVENT|AUTO_SCORE", "210"},
     {"ERR|BAD_REQUEST", "400 BAD_REQUEST"}, {"ERR|TOO_MANY_FIELDS", "400 TOO_MANY_FIELDS"},
     {"ERR|UNKNOWN_COMMAND", "400 UNKNOWN_COMMAND"},
@@ -74,7 +74,7 @@ static int matches(const char *s, const char *prefix, char delimiter) {
     size_t n = strlen(prefix);
     return !strncmp(s, prefix, n) && (!s[n] || s[n] == delimiter || (delimiter == '|' && s[n] == '\n'));
 }
-/* Requests and responses share internal names (EXAM, PRACTICE...). The caller
+/* Requests and responses may share action names (STATUS, RESULTS...). The caller
  * explicitly selects direction, rather than inferring it from message text. */
 static int sending_response;
 void net_set_server_mode(void) { sending_response = 1; }

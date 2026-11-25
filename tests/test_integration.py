@@ -159,7 +159,7 @@ def test_text_protocol():
             ui = subprocess.run([str(CLIENT), "127.0.0.1", str(port)],
                                 input="2\nowner\npw\n6\n1\n30\nA\ny\n0\n",
                                 text=True, encoding="utf-8", capture_output=True, timeout=10, cwd=ROOT)
-            assert ui.returncode == 0 and "PSCORE" in ui.stdout
+            assert ui.returncode == 0 and "SCORE|PRACTICE" in ui.stdout
             assert any(ord(c) > 127 for c in ui.stdout)
             with closing(sqlite3.connect(db_path)) as db:
                 assert db.execute("SELECT COUNT(*) FROM questions").fetchone()[0] == 20
@@ -283,6 +283,13 @@ def test_quoting_escape_and_validation():
             assert peer.ask(r'CREATE ROOM "bad\z" 1 30') == "400 BAD_REQUEST"
             assert peer.ask('REGISTER unwanted pw student ""') == "400 BAD_REQUEST"
             assert peer.ask("CREATE ROOM wrong 0 30") == "400 BAD_REQUEST"
+            for obsolete in ("PQUESTION 1 1", "PANSWER 1 1 A", "PSUBMIT 1", "PSTATUS 1", "PRACTICE 1 30"):
+                assert peer.ask(obsolete) == "400 UNKNOWN_COMMAND"
+            assert peer.ask("LOGOUT") == "112"
+            assert peer.ask("REGISTER ROOM pw") == "110"
+            assert peer.ask("LOGIN ROOM pw") == "111"
+            assert peer.ask("LOGOUT") == "112"
+            assert peer.ask("LOGIN codec pw") == "111"
             assert peer.ask("CREATE PRACTICE 21 30") == "409 NOT_ENOUGH_QUESTIONS"
             assert peer.ask("START ROOM missing") == "404 ROOM_NOT_FOUND"
             assert peer.ask(f"START ROOM {quoted}") == "409 NO_PARTICIPANTS"

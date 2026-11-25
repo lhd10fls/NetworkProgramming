@@ -221,14 +221,14 @@ stateDiagram-v2
 ## 7. Đường đi của một thông điệp
 
 1. Hàm giao diện trong client.c tạo chuỗi lệnh nội bộ.
-2. request gọi send_frame trong net.c. Codec đổi tên lệnh nội bộ thành cú pháp chung có phạm vi, tách tham số bằng dấu cách và thêm CRLF.
+2. request gọi send_frame trong net.c. Codec giữ hành động và phạm vi của yêu cầu, chuyển dấu phân trường nội bộ thành dấu cách, quoting và thêm CRLF.
 3. send_all lặp đến khi gửi đủ chuỗi. TCP có thể chia nhỏ/gộp dữ liệu.
 4. recv_frame phía server đọc đến CRLF, giới hạn độ dài, giải mã chuỗi sang dạng nội bộ; không đọc 4 byte độ dài như bản cũ.
 5. client_thread gọi dispatch dưới db_mutex để kiểm tra và xử lý lệnh. Với AWAIT, thực hiện vòng chờ và nhả khóa giữa các lượt.
 6. Server tạo phản hồi nội bộ; send_to_client dùng send_mutex ngăn phản hồi và sự kiện ghi chồng trên cùng socket. Codec đổi sang mã số, dấu cách, ROW và CRLF trên mạng.
 7. receiver_thread phía client giải mã, chuyển phản hồi cho request hoặc hiển thị sự kiện 210.
 
-Ký tự | và tên lệnh P... còn trong code là dạng nội bộ để tái sử dụng nghiệp vụ; không phải nội dung socket. Một phản hồi có nhiều ROW vẫn chỉ là một dòng giao thức. Bảng trên terminal được in thành các dòng/cột, tiêu đề và bản ghi dùng khoảng cách tab, không in dấu | làm vạch chia cột.
+Ký tự | là dấu phân trường nội bộ, không phải nội dung socket. Tên hành động nội bộ và trên mạng đều dùng CREATE/QUESTIONS/ANSWER/SUBMIT/STATUS có phạm vi ROOM/PRACTICE. Một phản hồi có nhiều ROW vẫn chỉ là một dòng giao thức. Bảng trên terminal được in thành các dòng/cột, tiêu đề và bản ghi dùng khoảng cách tab, không in dấu | làm vạch chia cột.
 
 ## 8. Ngắt kết nối, đăng xuất, khởi động lại
 

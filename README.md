@@ -69,7 +69,7 @@ Sau khi biên dịch, chạy `python tests/test_integration.py`. Kiểm thử d�
 
 ## Giới hạn
 
-Chưa có TLS, chống thử mật khẩu liên tục hoặc phiên bản giao thức. Mỗi phòng tối đa 32 người, đề tối đa 50 câu nhưng phải đủ câu trong ngân hàng. Server dùng một khóa SQLite chung, WAIT nội bộ thăm dò mỗi 100 ms; trên giao thức lệnh này mang tên AWAIT ROOM. Đây là ứng dụng phục vụ môn học trong mạng tin cậy.
+Chưa có TLS, chống thử mật khẩu liên tục hoặc phiên bản giao thức. Mỗi phòng tối đa 32 người, đề tối đa 50 câu nhưng phải đủ câu trong ngân hàng. Server dùng một khóa SQLite chung, AWAIT ROOM thăm dò mỗi 100 ms. Đây là ứng dụng phục vụ môn học trong mạng tin cậy.
 
 ## Tài khoản thống nhất và tương thích database
 
